@@ -1,0 +1,22 @@
+# Visual Studio 与构建输出
+.vs/
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+TestResults/
+AppPackages/
+
+# 本机配置和凭据
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+*.pfx
+*.p12
+
+# 个人曲库、录音与运行数据
+local-data/
+media-library/
+recordings/
+logs/
