@@ -23,6 +23,7 @@ internal static class FavoriteChecks
         await model.ToggleFavoriteAsync(b);
         await model.ToggleFavoriteAsync(a);
         await model.ToggleFavoriteAsync(c);
+        check(ReferenceEquals(model.LatestFavorite, c), "收藏页页头使用最后收藏的歌曲资料与封面实例");
         check(model.FavoriteResults.Select(item => item.Title).SequenceEqual(["C", "A", "B"])
             && model.Results.Select(item => item.Title).SequenceEqual(["A", "B", "C"]),
             "同一时钟刻度内收藏仍按操作时间倒序，曲库原排序不变");

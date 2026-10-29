@@ -113,6 +113,12 @@ internal static class LibraryScanChecks
         {
             Directories = [separateOne, separateTwo], Songs = [.. catalogOne.Songs, .. catalogTwo.Songs],
             Favorites = [catalogOne.Songs[0].Id, catalogTwo.Songs[0].Id], ScanCache = mergedCache,
+            Details = new()
+            {
+                [catalogOne.Songs[0].Id] = new(Corrections: new("较早修正", "艺人", "专辑", DateTimeOffset.UnixEpoch)),
+                [catalogTwo.Songs[0].Id] = new(Online: new(Year: "2020"),
+                    Corrections: new("最新修正", "修正艺人", "修正专辑", DateTimeOffset.UnixEpoch.AddDays(1)))
+            },
             FavoriteAddedAt = new()
             {
                 [catalogOne.Songs[0].Id] = DateTimeOffset.UnixEpoch,
@@ -129,5 +135,8 @@ internal static class LibraryScanChecks
         check(mergedModel.FavoriteResults.Count == 1 && mergedModel.Library.FavoriteAddedAt.Count == 1
             && mergedModel.Library.FavoriteAddedAt[mergedModel.FavoriteResults[0].Song.Id] == DateTimeOffset.UnixEpoch.AddDays(1),
             "重复歌曲合并时保留较新的收藏时间，收藏页仅显示一项");
+        check(mergedModel.Results.Single().Title == "最新修正" && mergedModel.Results.Single().Year == "2020"
+            && ReferenceEquals(mergedModel.FindSong(catalogTwo.Songs[0].Id), mergedModel.Results.Single()),
+            "重复歌曲合并保留最近的资料修正和联网资料，旧详情入口解析到合并后的歌曲");
     }
 }
