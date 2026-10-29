@@ -40,6 +40,14 @@ public sealed class PlaybackQueue
     public void MarkPlaying() { if (Current is not null) State = PlaybackState.Playing; }
     public void MarkPaused() { if (Current is not null) State = PlaybackState.Paused; }
 
+    public void RemapSongIds(IReadOnlyDictionary<string, string> aliases)
+    {
+        for (int i = 0; i < Pending.Count; i++)
+            if (aliases.TryGetValue(Pending[i].SongId, out string? id)) Pending[i] = Pending[i] with { SongId = id };
+        if (Current is not null && aliases.TryGetValue(Current.SongId, out string? currentId))
+            Current = Current with { SongId = currentId };
+    }
+
     public void ExitSession()
     {
         if (Current is not null) Pending.Insert(0, Current);

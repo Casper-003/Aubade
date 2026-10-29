@@ -6,4 +6,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../src/Vesper.Core/Vesper.Core.csproj" /></ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Vesper.App/MainViewModel.cs" Link="App/MainViewModel.cs" />
+    <Compile Include="../../src/Vesper.App/LibraryPresentation.cs" Link="App/LibraryPresentation.cs" />
+    <Compile Include="../../src/Vesper.App/ShellPreferences.cs" Link="App/ShellPreferences.cs" />
+    <Compile Include="../../src/Vesper.App/ActivityStatusPresenter.cs" Link="App/ActivityStatusPresenter.cs" />
+  </ItemGroup>
 </Project>

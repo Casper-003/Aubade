@@ -1,4 +1,5 @@
 using Vesper.Core;
+using Vesper.App;
 
 string root = Path.Combine(Path.GetTempPath(), "VesperChecks-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
@@ -64,6 +65,65 @@ try
     bool rejected = false;
     try { await store.LoadAsync(); } catch (System.Text.Json.JsonException) { rejected = true; }
     Check(rejected, "损坏记录明确报错，不静默覆盖为空曲库");
+    string uiStore = Path.Combine(root, "ui", "library.json");
+    var model = new MainViewModel(uiStore);
+    await model.InitializeAsync();
+    Check(model.ShowHomeHint && model.CanManage && model.Results.Count == 0,
+        "空曲库提示前往曲库页，初始化完成后允许导入");
+    await model.AddDirectoryAsync(first);
+    await model.AddDirectoryAsync(first + Path.DirectorySeparatorChar);
+    Check(model.Directories.Count == 1 && model.Results.Count == 1 && !model.ShowHomeHint,
+        "添加目录显示扫描结果，路径末尾分隔符不会重复收录目录");
+    LibrarySongItem imported = model.Results.Single();
+    await model.ToggleFavoriteAsync(imported);
+    await model.RemoveDirectoryAsync(model.Directories.Single().Path);
+    Check(File.Exists(other) && model.Results.Count == 0 && model.ShowHomeHint && model.Library.Favorites.Contains(imported.Song.Id),
+        "移除目录保留硬盘歌曲与收藏，默认隐藏失效记录");
+    model.HideUnavailable = false;
+    Check(model.Results.Count == 1 && !model.Results[0].IsAvailable && model.Results[0].IsFavorite,
+        "关闭隐藏选项可查看灰显的失效收藏歌曲");
+    await model.AddDirectoryAsync(first);
+    var reopened = new MainViewModel(uiStore);
+    await reopened.InitializeAsync();
+    Check(reopened.Results.Count == 1 && reopened.Results[0].IsFavorite && reopened.Directories.Count == 1,
+        "重启恢复目录、歌曲与收藏，重新收录的文件恢复可用");
+    await File.WriteAllTextAsync(uiStore, "{\"Directories\":null}");
+    string originalRecord = await File.ReadAllTextAsync(uiStore);
+    var broken = new MainViewModel(uiStore);
+    await broken.InitializeAsync();
+    await broken.AddDirectoryAsync(first);
+    Check(broken.ReadOnly && broken.HasProblem && !broken.CanManage
+        && await File.ReadAllTextAsync(uiStore) == originalRecord,
+        "结构损坏的曲库进入只读状态，拒绝导入且保留原记录");
+    var legacyPreferences = System.Text.Json.JsonSerializer.Deserialize<ShellPreferences>("{\"PaneOpen\":false,\"SystemAccent\":true}");
+    Check(legacyPreferences is { PaneOpen: false, SystemAccent: true, HideUnavailable: true },
+        "旧偏好记录保留主题和导航选择，新增隐藏不可用选项默认开启");
+    string preferenceJson = System.Text.Json.JsonSerializer.Serialize(new ShellPreferences(false, true, false));
+    Check(System.Text.Json.JsonSerializer.Deserialize<ShellPreferences>(preferenceJson)?.HideUnavailable == false,
+        "设置中的隐藏不可用选项可保存并恢复为关闭状态");
+    await LibraryScanChecks.RunAsync(root, Check);
+    await FavoriteChecks.RunAsync(root, Check);
+    MatroskaChecks.Run(Check);
+    model.BeginMetadataRead();
+    Check(model.HasBackgroundActivity && !model.Idle && model.CanManage && model.ActivityLabel == "读取歌曲资料",
+        "画质与艺人资料读取也纳入后台仪表，并保持目录操作可用");
+    model.EndMetadataRead();
+    Check(model.Idle && !model.HasBackgroundActivity, "资料读取完成后仪表恢复就绪状态");
+    var activity = new ActivityStatusPresenter();
+    var scanning = new ActivitySnapshot(true, "正在扫描", "扫描进度", "\uE73E");
+    var metadata = new ActivitySnapshot(true, "读取资料", "资料进度", "\uE73E");
+    var ready = new ActivitySnapshot(false, "就绪", "任务已完成", "\uE73E");
+    Check(activity.Request(scanning, TimeSpan.Zero) && activity.IsBusy, "首个后台状态可立即显示");
+    activity.Request(metadata, TimeSpan.FromMilliseconds(100));
+    activity.Request(ready, TimeSpan.FromMilliseconds(200));
+    Check(!activity.Flush(TimeSpan.FromMilliseconds(999)) && activity.Label == "正在扫描" && activity.IsBusy,
+        "不足一秒时文字与忙碌图形均保持原状态，不随实时报告闪动");
+    Check(activity.Flush(TimeSpan.FromSeconds(1)) && activity.Label == "就绪" && activity.Idle,
+        "一秒后合并到最新状态，跳过已经过期的中间任务");
+    activity.Request(scanning, TimeSpan.FromMilliseconds(1001));
+    Check(!activity.Flush(TimeSpan.FromMilliseconds(1999)) && activity.Idle
+        && activity.Flush(TimeSpan.FromSeconds(2)) && activity.IsBusy,
+        "包括就绪在内的每个已展示状态均至少保留一秒");
     Console.WriteLine($"{count} checks passed.");
 }
 finally
