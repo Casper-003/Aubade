@@ -1,0 +1,50 @@
+<UserControl x:Class="Vesper.App.SongDetailsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Vesper.App"
+    Loaded="OnLoaded" Unloaded="OnUnloaded">
+  <UserControl.Resources><local:BooleanToVisibilityConverter x:Key="BoolVisibility"/></UserControl.Resources>
+  <Grid x:Name="DetailsLayout" Margin="0,24,0,40" SizeChanged="OnDetailsSizeChanged">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <Grid x:Name="CoverPanel" HorizontalAlignment="Center">
+      <Border x:Name="CoverArt" Width="320" Height="320" VerticalAlignment="Center" CornerRadius="8" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+        <Grid>
+          <FontIcon Glyph="&#xE93C;" FontSize="80" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Visibility="{Binding HasNoCover, Converter={StaticResource BoolVisibility}}"/>
+          <Image Source="{Binding Cover}" Stretch="Uniform" Visibility="{Binding HasCover, Converter={StaticResource BoolVisibility}}" AutomationProperties.Name="专辑封面"/>
+        </Grid>
+      </Border>
+      <Grid VerticalAlignment="Center">
+        <Grid.RenderTransform><TranslateTransform x:Name="CoverActionsOffset" Y="204"/></Grid.RenderTransform>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Button Width="44" Height="40" Padding="0" Click="OnFavorite" ToolTipService.ToolTip="{Binding FavoriteHint}" AutomationProperties.Name="{Binding FavoriteHint}"><FontIcon Glyph="{Binding FavoriteGlyph}" FontSize="20"/></Button>
+        <Button Grid.Column="2" Width="44" Height="40" Padding="0" Click="OnQueue" IsEnabled="{Binding IsAvailable}" ToolTipService.ToolTip="加入待播" AutomationProperties.Name="加入待播"><FontIcon Glyph="&#xE710;" FontSize="20"/></Button>
+      </Grid>
+      <TextBlock Text="{Binding UnavailableLabel}" VerticalAlignment="Bottom" Margin="0,0,0,4" TextWrapping="Wrap" Visibility="{Binding IsUnavailable, Converter={StaticResource BoolVisibility}}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+    </Grid>
+    <ScrollViewer x:Name="DetailsScroll" Grid.Column="1" Margin="24,0,0,0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="24" Padding="0,0,12,24">
+        <Grid ColumnSpacing="8">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <TextBlock Text="{Binding Title}" FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
+          <Button x:Name="SearchButton" Grid.Column="1" Width="36" Height="36" Padding="0" VerticalAlignment="Top" Style="{StaticResource SubtleButtonStyle}" Click="OnSearch" ToolTipService.ToolTip="联网检索资料" AutomationProperties.Name="联网检索资料"><FontIcon Glyph="&#xE774;" FontSize="16"/></Button>
+          <Button x:Name="EditButton" Grid.Column="2" Width="36" Height="36" Padding="0" VerticalAlignment="Top" Style="{StaticResource SubtleButtonStyle}" Click="OnEdit" ToolTipService.ToolTip="修改资料" AutomationProperties.Name="修改资料"><FontIcon Glyph="&#xE70F;" FontSize="16"/></Button>
+        </Grid>
+        <TextBlock Text="{Binding LookupMessage}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding HasLookupMessage, Converter={StaticResource BoolVisibility}}"/>
+        <StackPanel Spacing="16">
+          <StackPanel Spacing="4" Visibility="{Binding HasArtist, Converter={StaticResource BoolVisibility}}"><TextBlock Text="艺人" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/><TextBlock Text="{Binding ArtistDetail}" FontSize="16" TextWrapping="Wrap" IsTextSelectionEnabled="True"/></StackPanel>
+          <StackPanel Spacing="4" Visibility="{Binding HasAlbum, Converter={StaticResource BoolVisibility}}"><TextBlock Text="专辑" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/><TextBlock Text="{Binding Album}" FontSize="16" TextWrapping="Wrap" IsTextSelectionEnabled="True"/></StackPanel>
+          <StackPanel Spacing="4" Visibility="{Binding HasPublisher, Converter={StaticResource BoolVisibility}}"><TextBlock Text="唱片公司" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/><TextBlock Text="{Binding Publisher}" FontSize="16" TextWrapping="Wrap" IsTextSelectionEnabled="True"/></StackPanel>
+          <StackPanel Spacing="4" Visibility="{Binding HasYear, Converter={StaticResource BoolVisibility}}"><TextBlock Text="发行年份" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/><TextBlock Text="{Binding Year}" FontSize="16"/></StackPanel>
+          <TextBlock Text="无法获取歌曲详情" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding HasNoDetails, Converter={StaticResource BoolVisibility}}"/>
+          <HyperlinkButton Content="{Binding SourceLabel}" NavigateUri="{Binding SourceUrl}" Padding="0" HorizontalAlignment="Left" Visibility="{Binding HasSource, Converter={StaticResource BoolVisibility}}"/>
+          <HyperlinkButton Content="查看已匹配的 MV" NavigateUri="{Binding MatchedVideoUrl}" Padding="0" HorizontalAlignment="Left" Visibility="{Binding HasMatchedVideo, Converter={StaticResource BoolVisibility}}"/>
+        </StackPanel>
+        <StackPanel Spacing="16">
+          <TextBlock Text="歌词" Style="{StaticResource SubtitleTextBlockStyle}"/>
+          <TextBlock Text="{Binding Lyrics}" FontSize="18" LineHeight="32" TextWrapping="Wrap" IsTextSelectionEnabled="True" Visibility="{Binding HasLyrics, Converter={StaticResource BoolVisibility}}"/>
+          <TextBlock Text="暂无歌词" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding HasNoLyrics, Converter={StaticResource BoolVisibility}}"/>
+          <HyperlinkButton Content="{Binding LyricsSourceLabel}" NavigateUri="{Binding LyricsSourceUrl}" Padding="0" HorizontalAlignment="Left" Visibility="{Binding HasLyricsSource, Converter={StaticResource BoolVisibility}}"/>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

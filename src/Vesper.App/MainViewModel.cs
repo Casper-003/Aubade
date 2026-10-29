@@ -9,7 +9,7 @@ namespace Vesper.App;
 public delegate Task<ScanResult> ScanLibrary(string[] directories, Song[] previous,
     IReadOnlyDictionary<string, FileScanCache> cache, IProgress<ScanProgress> progress, CancellationToken token);
 
-public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
+public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     public event PropertyChangedEventHandler? PropertyChanged;
     private bool busy, initialized, choosingDirectory, disposed;
@@ -21,6 +21,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly TimeProvider clock;
     private readonly Dictionary<string, int> favoriteChanges = [];
     private int favoriteChange;
+    private readonly Dictionary<string, string> songAliases = [];
+    private readonly SemaphoreSlim detailsWrites = new(1, 1);
     private Task? scanTask;
     private CancellationTokenSource? scanCancellation;
     private bool scanRequested;
@@ -30,6 +32,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public PlaybackQueue Queue { get; } = new();
     public ObservableCollection<LibrarySongItem> Results { get; } = [];
     public ObservableCollection<LibrarySongItem> FavoriteResults { get; } = [];
+    public LibrarySongItem? LatestFavorite => Library.Songs.Where(song => Library.Favorites.Contains(song.Id))
+        .OrderByDescending(song => Library.FavoriteAddedAt.GetValueOrDefault(song.Id))
+        .ThenBy(song => song.Title, StringComparer.CurrentCultureIgnoreCase).Select(song => FindSong(song.Id)).FirstOrDefault();
+    public LibrarySongItem? LibraryHero => Library.Songs.Where(song => availability.GetValueOrDefault(song.Id))
+        .Select(song => FindSong(song.Id)).FirstOrDefault();
     public ObservableCollection<LibraryDirectoryItem> Directories { get; } = [];
     public LibraryStore Store { get; }
     public ScanStatistics? LastScanStatistics { get; private set; }
@@ -43,7 +50,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string ActivityLabel => Busy ? activityDetail : metadataReads > 0 ? "读取歌曲资料" : HasProblem ? "需要注意" : "就绪";
     public string ActivityGlyph => HasProblem ? "\uE7BA" : "\uE73E";
     public string ActivityTooltip => Busy ? $"{activityDetail}。可继续添加文件夹、管理目录和点歌。"
-        : metadataReads > 0 ? $"正在读取 {metadataReads} 首歌曲的画质或艺人资料，界面可继续操作。"
+        : metadataReads > 0 ? "正在读取歌曲资料或检索歌词，界面可继续操作。"
         : HasProblem ? Problem : LastScanStatistics is { } stats
         ? $"上次检查 {stats.Files} 个文件，用时 {stats.Elapsed.TotalSeconds:F2} 秒；完整核对 {stats.HashedFiles} 个文件，读取 {stats.HashedBytes / 1048576d:F1} MB。"
         : "没有后台活动";
@@ -107,6 +114,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 throw new InvalidDataException("曲库记录结构不完整。");
             Library.ScanCache ??= new(StringComparer.OrdinalIgnoreCase);
             Library.FavoriteAddedAt ??= [];
+            Library.Details ??= [];
+            if (Library.Details.Values.Any(value => value is null)) throw new InvalidDataException("歌曲资料记录不完整。");
             Song[] loaded = Library.Songs.ToArray();
             availability = await Task.Run(() => GetAvailability(loaded));
             initialized = true;
@@ -163,6 +172,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     Library.ScanCache = scan.Cache;
                     if (revision != directoryRevision) { scanRequested = true; continue; }
                     Library.Songs = scan.Songs;
+                    RemapDetails(scan.Aliases);
                     RemapFavorites(scan.Aliases);
                     Queue.RemapSongIds(scan.Aliases);
                     availability = available;
@@ -285,7 +295,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public void AddToQueue(LibrarySongItem item)
     {
         if (!item.Song.IsAvailable) { ReportProblem("文件不可用，请刷新曲库后重试。"); return; }
-        Queue.Add(item.Song); Status = $"已加入待播 · 第 {Queue.Pending.Count} 位 · {item.Title}";
+        Queue.Add(item.Song with { Title = item.Title }); Status = $"已加入待播 · 第 {Queue.Pending.Count} 位 · {item.Title}";
     }
     public void ReportProblem(string message) { Problem = message; Status = "操作未完成"; }
 
@@ -301,43 +311,96 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         NotifyState();
     }
 
+    public double LastFilterMilliseconds { get; private set; }
+    public int LastCollectionMoves { get; private set; }
+
     private void Filter()
     {
+        long started = Stopwatch.GetTimestamp();
         var desired = new List<LibrarySongItem>();
         availableCount = 0;
-        foreach (Song song in Library.Songs.OrderBy(s => s.Title, StringComparer.CurrentCultureIgnoreCase))
+        foreach (Song song in Library.Songs.OrderBy(s => Library.Details.GetValueOrDefault(s.Id)?.Effective(s.Title).Title ?? s.Title,
+            StringComparer.CurrentCultureIgnoreCase))
         {
             if (!songItems.TryGetValue(song.Id, out var item)) songItems[song.Id] = item = new(song);
             bool available = availability.GetValueOrDefault(song.Id);
             item.Update(song, Library.Favorites.Contains(song.Id), available);
+            item.ApplyDetails(Library.Details.GetValueOrDefault(song.Id) ?? new());
             if (available) availableCount++;
             if (!HideUnavailable || available) desired.Add(item);
         }
-        SyncRows(Results, desired);
-        UpdateFavorites();
+        LastCollectionMoves = SyncRows(Results, desired);
+        LastCollectionMoves += UpdateFavorites();
         NotifyState();
+        LastFilterMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
     }
 
-    private void UpdateFavorites()
+    private int UpdateFavorites()
     {
         var desired = Results.Where(item => item.IsFavorite)
             .OrderByDescending(item => Library.FavoriteAddedAt.GetValueOrDefault(item.Song.Id))
             .ThenBy(item => item.Title, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(item => item.Song.Id, StringComparer.Ordinal).ToList();
-        SyncRows(FavoriteResults, desired);
+        int moves = SyncRows(FavoriteResults, desired);
+        Notify(nameof(LatestFavorite));
         Notify(nameof(HasNoFavorites)); Notify(nameof(FavoriteEmptyMessage)); Notify(nameof(FavoriteEmptyHint));
+        return moves;
     }
 
-    private static void SyncRows(ObservableCollection<LibrarySongItem> rows, IReadOnlyList<LibrarySongItem> desired)
+    internal static int SyncRows(ObservableCollection<LibrarySongItem> rows, IReadOnlyList<LibrarySongItem> desired)
     {
-        // 两个页面共享歌曲行资料，刷新或收藏操作不清空整张列表。
-        for (int i = 0; i < desired.Count; i++)
+        if (rows.Count == desired.Count && rows.SequenceEqual(desired)) return 0;
+        var wanted = desired.ToHashSet();
+        for (int i = rows.Count - 1; i >= 0; i--) if (!wanted.Contains(rows[i])) rows.RemoveAt(i);
+        if (rows.Count == 0)
         {
-            if (i < rows.Count && ReferenceEquals(rows[i], desired[i])) continue;
-            int existing = rows.IndexOf(desired[i]);
-            if (existing >= 0) rows.Move(existing, i); else rows.Insert(i, desired[i]);
+            foreach (var item in desired) rows.Add(item);
+            return 0;
         }
-        while (rows.Count > desired.Count) rows.RemoveAt(rows.Count - 1);
+
+        // Preserve the largest already-ordered subset. Moving the first song to the end must
+        // emit one Move, not move every other song forward and invalidate the whole ListView.
+        var oldIndices = rows.Select((item, index) => (item, index)).ToDictionary(pair => pair.item, pair => pair.index);
+        int[] positions = desired.Select(item => oldIndices.GetValueOrDefault(item, -1)).ToArray();
+        int[] tails = new int[desired.Count], previous = new int[desired.Count];
+        Array.Fill(previous, -1);
+        int length = 0;
+        for (int i = 0; i < positions.Length; i++)
+        {
+            if (positions[i] < 0) continue;
+            int low = 0, high = length;
+            while (low < high)
+            {
+                int middle = (low + high) / 2;
+                if (positions[tails[middle]] < positions[i]) low = middle + 1; else high = middle;
+            }
+            if (low > 0) previous[i] = tails[low - 1];
+            tails[low] = i;
+            if (low == length) length++;
+        }
+        var keep = new HashSet<LibrarySongItem>();
+        if (length > 0)
+            for (int i = tails[length - 1]; i >= 0; i = previous[i]) keep.Add(desired[i]);
+
+        int moves = 0;
+        LibrarySongItem? anchor = null;
+        for (int i = desired.Count - 1; i >= 0; i--)
+        {
+            var item = desired[i];
+            if (!keep.Contains(item))
+            {
+                int from = rows.IndexOf(item);
+                int to = anchor is null ? rows.Count : rows.IndexOf(anchor);
+                if (from < 0) rows.Insert(to, item);
+                else
+                {
+                    if (from < to) to--;
+                    if (from != to) { rows.Move(from, to); moves++; }
+                }
+            }
+            anchor = item;
+        }
+        return moves;
     }
 
     private static Dictionary<string, bool> GetAvailability(IEnumerable<Song> songs) =>
@@ -350,6 +413,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     { Notify(nameof(ActivityLabel)); Notify(nameof(ActivityTooltip)); Notify(nameof(ActivityGlyph)); }
     private void NotifyState()
     {
+        Notify(nameof(LibraryHero));
         foreach (string property in new[] { nameof(CanManage), nameof(ShowHomeHint), nameof(HasNoDirectories),
             nameof(HasNoResults), nameof(HasNoFavorites), nameof(FavoriteEmptyMessage), nameof(FavoriteEmptyHint),
             nameof(DirectorySummary), nameof(LibrarySummary), nameof(EmptyMessage), nameof(EmptyHint) }) Notify(property);

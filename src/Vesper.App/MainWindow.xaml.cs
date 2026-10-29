@@ -22,6 +22,10 @@ public sealed partial class MainWindow : Window
     private bool changingSelection;
     private bool closed;
     private bool canSave = true;
+    private readonly UiResponsivenessTrace? responsivenessTrace;
+    private bool themeApplied, appliedDark;
+    private Windows.UI.Color appliedAccent;
+    private int themeSignals, themeRepaints;
 
     public MainWindow()
     {
@@ -34,6 +38,8 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         { canSave = false; }
         InitializeComponent();
+        if (Environment.GetEnvironmentVariable("VESPER_PERF_TRACE_PATH") is { Length: > 0 } tracePath)
+            responsivenessTrace = new(DispatcherQueue, tracePath, GetOverviewDiagnostics);
         PageArea.DataContext = viewModel;
         InitializeLibraryPresentation();
         viewModel.HideUnavailable = preferences.HideUnavailable;
@@ -59,7 +65,7 @@ public sealed partial class MainWindow : Window
             SavePreferences();
         });
         systemUi.ColorValuesChanged += OnSystemColorsChanged;
-        Closed += (_, _) => { closed = true; systemUi.ColorValuesChanged -= OnSystemColorsChanged; CloseLibraryPresentation(); };
+        Closed += (_, _) => { closed = true; responsivenessTrace?.Dispose(); systemUi.ColorValuesChanged -= OnSystemColorsChanged; CloseLibraryPresentation(); };
         Activated += (_, _) => ApplyTheme();
         ContentFrame.Navigate(typeof(ShellPage), new ShellNavigationRequest("首页", this), new EntranceNavigationTransitionInfo());
     }
@@ -69,10 +75,19 @@ public sealed partial class MainWindow : Window
         if (Navigation.SettingsItem is NavigationViewItem settingsItem) settingsItem.Content = "设置";
         ApplyTheme(); UpdateTitleLayout();
         if (!canSave) PreferenceNotice.IsOpen = true;
+        if (Environment.GetEnvironmentVariable("VESPER_RUNTIME_CHECK_PATH") is { Length: > 0 })
+        {
+            if (!libraryInitialized) { libraryInitialized = true; await RunOverviewRuntimeChecksAsync(); }
+            return;
+        }
         if (!libraryInitialized)
         {
             libraryInitialized = true;
             await viewModel.InitializeAsync();
+            if (!closed && Environment.GetEnvironmentVariable("VESPER_PREVIEW_PAGE") is "曲库" or "收藏" &&
+                Navigation.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(item =>
+                    (string)item.Tag == Environment.GetEnvironmentVariable("VESPER_PREVIEW_PAGE")) is { } previewItem)
+                Navigation.SelectedItem = previewItem;
         }
     }
 
@@ -82,15 +97,25 @@ public sealed partial class MainWindow : Window
     private void ApplyTheme()
     {
         if (!ready) return;
+        themeSignals++;
         object? light = Microsoft.Win32.Registry.GetValue(
             @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1);
         bool dark = light is int value && value == 0;
-        Root.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light;
-        AppWindow.TitleBar.ButtonForegroundColor = dark ? Colors.White : Colors.Black;
-        AppWindow.TitleBar.ButtonInactiveForegroundColor = dark ? Colors.Gray : Colors.DimGray;
         Windows.UI.Color accent = SystemAccent.IsChecked == true
             ? systemUi.GetColorValue(UIColorType.Accent) : Windows.UI.Color.FromArgb(255, 0x39, 0xC5, 0xBB);
-        Navigation.Resources["NavigationViewSelectionIndicatorForeground"] = new SolidColorBrush(accent);
+        if (themeApplied && dark == appliedDark && accent.Equals(appliedAccent)) return;
+        themeRepaints++;
+        if (!themeApplied || dark != appliedDark)
+        {
+            Root.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light;
+            AppWindow.TitleBar.ButtonForegroundColor = dark ? Colors.White : Colors.Black;
+            AppWindow.TitleBar.ButtonInactiveForegroundColor = dark ? Colors.Gray : Colors.DimGray;
+            ApplyOverviewTheme(dark);
+        }
+        if (Navigation.Resources["NavigationViewSelectionIndicatorForeground"] is SolidColorBrush accentBrush)
+            accentBrush.Color = accent;
+        else Navigation.Resources["NavigationViewSelectionIndicatorForeground"] = new SolidColorBrush(accent);
+        themeApplied = true; appliedDark = dark; appliedAccent = accent;
     }
 
     private void OnAccentChanged(object sender, RoutedEventArgs e)
@@ -133,28 +158,32 @@ public sealed partial class MainWindow : Window
         try
         {
             Navigation.SelectedItem = page == "设置" ? Navigation.SettingsItem
-                : Navigation.MenuItems.OfType<NavigationViewItem>().First(item => (string)item.Tag == page);
+                : Navigation.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(item => (string)item.Tag == page);
         }
         finally { changingSelection = false; }
-        PageTitle.Text = page;
+        PageTitle.Text = request.SongId is not null ? "歌曲详情" : page;
+        bool overview = page is "曲库" or "收藏";
+        PageHeading.Visibility = overview ? Visibility.Collapsed : Visibility.Visible;
+        PageArea.Padding = overview ? new Thickness(0) : new Thickness(28, 24, 28, 24);
         LibraryActions.Visibility = page == "曲库" ? Visibility.Visible : Visibility.Collapsed;
-        SongFeedbackPanel.Visibility = page is "曲库" or "收藏" ? Visibility.Visible : Visibility.Collapsed;
+        SongFeedbackPanel.Visibility = page is "曲库" or "收藏" || request.SongId is not null ? Visibility.Visible : Visibility.Collapsed;
         BackButton.IsEnabled = ContentFrame.CanGoBack;
         ForwardButton.IsEnabled = ContentFrame.CanGoForward;
         DispatcherQueue.TryEnqueue(UpdateTitleLayout);
     }
 
-    internal void AttachPageContent(ShellPage page, string key)
+    internal void AttachPageContent(ShellPage page, string key, string? songId)
     {
         if (!pageContent.TryGetValue(key, out FrameworkElement? content))
         {
-            content = key switch { "首页" => HomePage, "曲库" => LibraryPage, "收藏" => FavoritesPage, "设置" => AppearancePanel, _ => new Grid() };
+            content = songId is not null ? new SongDetailsView(this, songId)
+                : key switch { "首页" => HomePage, "曲库" => LibraryPage, "收藏" => FavoritesPage, "设置" => AppearancePanel, _ => new Grid() };
             PageStorage.Children.Remove(content);
             pageContent[key] = content;
         }
         if (pageOwners.TryGetValue(key, out ShellPage? previous)) previous.Content = null;
         content.Visibility = Visibility.Visible;
-        content.DataContext = viewModel;
+        if (songId is null) content.DataContext = viewModel;
         page.Content = content;
         pageOwners[key] = page;
     }

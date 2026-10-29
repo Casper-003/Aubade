@@ -16,6 +16,7 @@ public sealed class LibraryState
     public List<Song> Songs { get; set; } = [];
     public HashSet<string> Favorites { get; set; } = [];
     public Dictionary<string, DateTimeOffset> FavoriteAddedAt { get; set; } = [];
+    public Dictionary<string, SongDetails> Details { get; set; } = [];
     public Dictionary<string, FileScanCache> ScanCache { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
@@ -36,6 +37,7 @@ public sealed class LibraryStore(string path)
         {
             Directories = [.. state.Directories], Songs = [.. state.Songs], Favorites = [.. state.Favorites],
             FavoriteAddedAt = new(state.FavoriteAddedAt),
+            Details = new(state.Details),
             ScanCache = new(state.ScanCache, StringComparer.OrdinalIgnoreCase)
         };
         await saveLock.WaitAsync();

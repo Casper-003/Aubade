@@ -103,6 +103,11 @@ try
         "设置中的隐藏不可用选项可保存并恢复为关闭状态");
     await LibraryScanChecks.RunAsync(root, Check);
     await FavoriteChecks.RunAsync(root, Check);
+    await SongDetailsChecks.RunAsync(root, Check);
+    await AutomaticLookupChecks.RunAsync(root, Check);
+    await AdditionalSourceChecks.RunAsync(Check);
+    LyricsDisplayChecks.Run(Check);
+    await OverviewChecks.RunAsync(root, Check);
     MatroskaChecks.Run(Check);
     model.BeginMetadataRead();
     Check(model.HasBackgroundActivity && !model.Idle && model.CanManage && model.ActivityLabel == "读取歌曲资料",
