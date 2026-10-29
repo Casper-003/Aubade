@@ -143,10 +143,10 @@ public sealed partial class MainWindow
         visual.Clip = clip;
         clip.StartAnimation("BottomInset", Expression($"({progress}) * (metrics.Height - 48)"));
         // Animate the shared title host through XAML facade properties, avoiding layout-owned offsets/scales.
-        var translation = Expression($"Vector3(0, (metrics.Height - 104) * (1 - ({progress})) + 9 * ({progress}), 0)");
+        var translation = Expression($"Vector3(0, (metrics.Height - 132) * (1 - ({progress})) + 9 * ({progress}), 0)");
         translation.Target = "Translation";
         titleMotion.StartAnimation(translation);
-        var scale = Expression($"Vector3(1 - ({progress}) * 0.6666667, 1 - ({progress}) * 0.6666667, 1)");
+        var scale = Expression($"Vector3(1 - ({progress}) * 0.75, 1 - ({progress}) * 0.75, 1)");
         scale.Target = "Scale";
         titleMotion.StartAnimation(scale);
         if (!favorite)
