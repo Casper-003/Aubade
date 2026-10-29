@@ -1,0 +1,187 @@
+<Window x:Class="Vesper.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Vesper.App"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls" xmlns:animated="using:Microsoft.UI.Xaml.Controls.AnimatedVisuals" Title="Vesper">
+  <Grid x:Name="Root" Loaded="OnLoaded" SizeChanged="OnLayoutChanged">
+    <Grid.Resources>
+      <local:BooleanToVisibilityConverter x:Key="BoolVisibility"/>
+      <Style x:Key="ToolbarIconStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
+        <Setter Property="Width" Value="36"/><Setter Property="Height" Value="36"/><Setter Property="Padding" Value="0"/>
+      </Style>
+      <Style x:Key="HistoryButtonStyle" TargetType="Button">
+        <Setter Property="Width" Value="48"/><Setter Property="Height" Value="36"/><Setter Property="Margin" Value="4,6"/>
+        <Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="{ThemeResource NavigationViewItemForeground}"/>
+        <Setter Property="UseSystemFocusVisuals" Value="True"/>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+          <Grid x:Name="ButtonRoot" Background="{TemplateBinding Background}" CornerRadius="{ThemeResource ControlCornerRadius}">
+            <VisualStateManager.VisualStateGroups><VisualStateGroup x:Name="CommonStates">
+              <VisualState x:Name="Normal"><VisualState.Setters><Setter Target="Arrow.(controls:AnimatedIcon.State)" Value="Normal"/></VisualState.Setters></VisualState>
+              <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="ButtonRoot.Background" Value="{ThemeResource NavigationViewButtonBackgroundPointerOver}"/><Setter Target="Arrow.(controls:AnimatedIcon.State)" Value="PointerOver"/></VisualState.Setters></VisualState>
+              <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="ButtonRoot.Background" Value="{ThemeResource NavigationViewButtonBackgroundPressed}"/><Setter Target="Arrow.(controls:AnimatedIcon.State)" Value="Pressed"/></VisualState.Setters></VisualState>
+              <VisualState x:Name="Disabled"><VisualState.Setters><Setter Target="Arrow.Foreground" Value="{ThemeResource NavigationViewButtonForegroundDisabled}"/></VisualState.Setters></VisualState>
+            </VisualStateGroup></VisualStateManager.VisualStateGroups>
+            <AnimatedIcon x:Name="Arrow" Width="16" Height="16" Foreground="{TemplateBinding Foreground}" MirroredWhenRightToLeft="True" controls:AnimatedIcon.State="Normal">
+              <animated:AnimatedBackVisualSource/>
+              <AnimatedIcon.FallbackIconSource><FontIconSource Glyph="&#xE72B;" FontSize="16" MirroredWhenRightToLeft="True"/></AnimatedIcon.FallbackIconSource>
+            </AnimatedIcon>
+          </Grid>
+        </ControlTemplate></Setter.Value></Setter>
+      </Style>
+      <Style x:Key="ActivityItemStyle" TargetType="NavigationViewItem">
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="NavigationViewItem">
+          <Grid x:Name="ActivityRoot" MinHeight="{ThemeResource NavigationViewItemOnLeftMinHeight}" Margin="{ThemeResource NavigationViewItemButtonMargin}" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" Control.IsTemplateFocusTarget="True">
+            <VisualStateManager.VisualStateGroups><VisualStateGroup x:Name="CommonStates">
+              <VisualState x:Name="Normal"/>
+              <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="ActivityRoot.Background" Value="{ThemeResource NavigationViewItemBackgroundPointerOver}"/></VisualState.Setters></VisualState>
+              <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="ActivityRoot.Background" Value="{ThemeResource NavigationViewItemBackgroundPressed}"/></VisualState.Setters></VisualState>
+            </VisualStateGroup></VisualStateManager.VisualStateGroups>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid Width="48">
+              <ProgressRing Width="16" Height="16" Foreground="{TemplateBinding Foreground}" IsActive="{Binding IsBusy}" Visibility="{Binding IsBusy, Converter={StaticResource BoolVisibility}}"/>
+              <FontIcon Glyph="{Binding Glyph}" FontSize="16" Foreground="{TemplateBinding Foreground}" Visibility="{Binding Idle, Converter={StaticResource BoolVisibility}}"/>
+            </Grid>
+            <ContentPresenter Grid.Column="1" Margin="4,0,12,0" VerticalAlignment="Center" Content="{TemplateBinding Content}" FontSize="{TemplateBinding FontSize}" FontWeight="{TemplateBinding FontWeight}" Foreground="{TemplateBinding Foreground}" Visibility="{Binding IsPaneOpen, Converter={StaticResource BoolVisibility}}"/>
+          </Grid>
+        </ControlTemplate></Setter.Value></Setter>
+      </Style>
+      <Style x:Key="LibraryRowStyle" TargetType="ListViewItem">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Margin" Value="0,2"/>
+      </Style>
+      <DataTemplate x:Key="SongRowTemplate">
+        <Grid Padding="8" ColumnSpacing="14" Opacity="{Binding RowOpacity}" Loaded="OnSongRowLoaded" DataContextChanged="OnSongRowContextChanged">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <Border Width="48" Height="48" CornerRadius="4" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+            <FontIcon Glyph="&#xE93C;" FontSize="22" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding Title}"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{Binding Resolution}" Visibility="{Binding HasResolution, Converter={StaticResource BoolVisibility}}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+              <TextBlock Text="{Binding Artist}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+              <TextBlock Text="{Binding UnavailableLabel}" Visibility="{Binding IsUnavailable, Converter={StaticResource BoolVisibility}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <Button Width="32" Height="32" Padding="0" Click="OnFavoriteSong" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="{Binding FavoriteHint}" AutomationProperties.Name="{Binding FavoriteHint}"><FontIcon Glyph="{Binding FavoriteGlyph}" FontSize="16"/></Button>
+            <Button Width="32" Height="32" Padding="0" Click="OnQueueSong" IsEnabled="{Binding IsAvailable}" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="加入待播" AutomationProperties.Name="加入待播"><FontIcon Glyph="&#xE710;" FontSize="16"/></Button>
+          </StackPanel>
+        </Grid>
+      </DataTemplate>
+    </Grid.Resources>
+    <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <Grid x:Name="AppTitleBar" Background="Transparent">
+      <StackPanel x:Name="HistoryArea" Orientation="Horizontal" HorizontalAlignment="Left">
+        <Button x:Name="BackButton" IsEnabled="False" Click="OnBack" Style="{StaticResource HistoryButtonStyle}" ToolTipService.ToolTip="后退" AutomationProperties.Name="后退"/>
+        <Button x:Name="ForwardButton" IsEnabled="False" Click="OnForward" FlowDirection="RightToLeft" Style="{StaticResource HistoryButtonStyle}" ToolTipService.ToolTip="前进" AutomationProperties.Name="前进"/>
+      </StackPanel>
+    </Grid>
+    <NavigationView x:Name="Navigation" Grid.Row="1" PaneDisplayMode="Left" IsPaneOpen="True"
+        OpenPaneLength="220" CompactPaneLength="56" AlwaysShowHeader="False"
+        IsBackButtonVisible="Collapsed" IsSettingsVisible="True" SelectionChanged="OnSelectionChanged">
+      <NavigationView.Resources>
+        <SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="#39C5BB"/>
+        <CornerRadius x:Key="NavigationViewContentGridCornerRadius">8</CornerRadius>
+        <Thickness x:Key="NavigationViewContentMargin">0,0,4,4</Thickness>
+      </NavigationView.Resources>
+      <NavigationView.MenuItems>
+        <NavigationViewItem x:Name="HomeItem" Content="首页" Tag="首页" Icon="Home"/>
+        <NavigationViewItem Content="搜索" Tag="搜索" Icon="Find"/>
+        <NavigationViewItem Content="收藏" Tag="收藏" Icon="Favorite"/>
+        <NavigationViewItem Content="曲库" Tag="曲库" Icon="Library"/>
+        <NavigationViewItem Content="创作" Tag="创作" Icon="Edit"/>
+      </NavigationView.MenuItems>
+      <NavigationView.FooterMenuItems>
+        <NavigationViewItem x:Name="ActivityNavigationItem" Content="{Binding Label}" Style="{StaticResource ActivityItemStyle}" SelectsOnInvoked="False" ToolTipService.ToolTip="{Binding Tooltip}" AutomationProperties.Name="{Binding Label}"/>
+      </NavigationView.FooterMenuItems>
+      <Grid x:Name="PageArea" Padding="28,24" Background="Transparent">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid ColumnSpacing="20">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <TextBlock x:Name="PageTitle" Text="首页" Style="{StaticResource TitleTextBlockStyle}" VerticalAlignment="Center"/>
+          <StackPanel x:Name="LibraryActions" Grid.Column="1" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+            <Button x:Name="AddFolderButton" Click="OnAddFolder" IsEnabled="{Binding CanManage}" Style="{StaticResource ToolbarIconStyle}" ToolTipService.ToolTip="添加歌曲文件夹" AutomationProperties.Name="添加歌曲文件夹">
+              <FontIcon Glyph="&#xE8F4;" FontSize="16"/>
+            </Button>
+            <Button x:Name="ManageFoldersButton" IsEnabled="{Binding CanManage}" Style="{StaticResource ToolbarIconStyle}" ToolTipService.ToolTip="管理歌曲文件夹" AutomationProperties.Name="管理歌曲文件夹">
+              <FontIcon Glyph="&#xE8B7;" FontSize="16"/>
+              <Button.Flyout>
+                <Flyout x:Name="DirectoryFlyout" Placement="BottomEdgeAlignedRight">
+                  <Grid x:Name="DirectoryPanel" Width="440" MaxHeight="340" RowSpacing="12">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid><TextBlock Text="歌曲文件夹" Style="{StaticResource SubtitleTextBlockStyle}"/><TextBlock Text="{Binding DirectorySummary}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></Grid>
+                    <Grid Grid.Row="1">
+                      <TextBlock Text="尚未添加歌曲文件夹。使用工具栏的文件夹加号选择歌曲目录。" Margin="0,8" MaxWidth="360" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding HasNoDirectories, Converter={StaticResource BoolVisibility}}"/>
+                      <ListView ItemsSource="{Binding Directories}" SelectionMode="None" MaxHeight="280" IsEnabled="{Binding CanManage}" ItemContainerStyle="{StaticResource LibraryRowStyle}">
+                        <ListView.ItemTemplate><DataTemplate>
+                          <Grid Padding="4,8" ColumnSpacing="12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Spacing="3"><TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Path}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" ToolTipService.ToolTip="{Binding Path}"/></StackPanel>
+                            <FontIcon Grid.Column="1" Glyph="{Binding AvailabilityGlyph}" FontSize="14" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" ToolTipService.ToolTip="{Binding Availability}" AutomationProperties.Name="{Binding Availability}"/>
+                            <Button Grid.Column="2" Width="32" Height="32" Padding="0" Click="OnRemoveDirectory" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="移除目录，保留硬盘原文件" AutomationProperties.Name="移除目录"><FontIcon Glyph="&#xE738;" FontSize="14"/></Button>
+                          </Grid>
+                        </DataTemplate></ListView.ItemTemplate>
+                      </ListView>
+                    </Grid>
+                  </Grid>
+                </Flyout>
+              </Button.Flyout>
+            </Button>
+            <Button x:Name="RefreshLibraryButton" Click="OnRefreshLibrary" IsEnabled="{Binding CanManage}" Style="{StaticResource ToolbarIconStyle}" ToolTipService.ToolTip="刷新曲库" AutomationProperties.Name="刷新曲库">
+              <FontIcon Glyph="&#xE72C;" FontSize="16"/>
+            </Button>
+          </StackPanel>
+        </Grid>
+        <Frame x:Name="ContentFrame" Grid.Row="1" Navigated="OnFrameNavigated">
+          <Frame.ContentTransitions><TransitionCollection><NavigationThemeTransition/></TransitionCollection></Frame.ContentTransitions>
+        </Frame>
+        <Grid x:Name="PageStorage" Grid.Row="1" Visibility="Collapsed">
+        <Grid x:Name="HomePage" Margin="0,28,0,0">
+          <StackPanel x:Name="HomeLibraryGuide" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520" Spacing="20" Visibility="{Binding ShowHomeHint, Converter={StaticResource BoolVisibility}}">
+            <FontIcon Glyph="&#xE8F1;" FontSize="48" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            <TextBlock Text="还没有可用的歌曲" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
+            <TextBlock Text="先把电脑中的歌曲或 MV 所在文件夹加入曲库。Vesper 会收录其中的本地媒体，文件仍保留在原位置。" FontSize="16" TextWrapping="Wrap" TextAlignment="Center"/>
+            <StackPanel Spacing="14" Margin="12,0">
+              <StackPanel Orientation="Horizontal" Spacing="12"><FontIcon Glyph="&#xE8F1;" FontSize="18" VerticalAlignment="Top" Margin="0,3,0,0"/><TextBlock Text="1. 打开左侧导航的“曲库”页面。" FontSize="16" TextWrapping="Wrap"/></StackPanel>
+              <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><FontIcon Glyph="&#xE8F4;" FontSize="18" VerticalAlignment="Top" Margin="0,3,0,0"/><TextBlock Grid.Column="1" Text="2. 点击页面右上角的文件夹加号，选择歌曲所在目录。" FontSize="16" TextWrapping="Wrap"/></Grid>
+            </StackPanel>
+            <TextBlock Text="导入后，你可以在曲库中浏览、收藏歌曲，并将它们加入待播。" FontSize="15" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center"/>
+          </StackPanel>
+        </Grid>
+        <Grid x:Name="LibraryPage" Grid.Row="1" Margin="0,24,0,0" Visibility="Collapsed" RowSpacing="16">
+            <ListView x:Name="LibrarySongs" Margin="0,0,0,40" ItemsSource="{Binding Results}" SelectionMode="None" ItemContainerStyle="{StaticResource LibraryRowStyle}" ItemTemplate="{StaticResource SongRowTemplate}"/>
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" Visibility="{Binding HasNoResults, Converter={StaticResource BoolVisibility}}">
+              <FontIcon Glyph="&#xE8F1;" FontSize="40" Margin="0,0,0,16" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+              <TextBlock Text="{Binding EmptyMessage}" HorizontalAlignment="Center" FontSize="18"/>
+              <TextBlock Text="{Binding EmptyHint}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="400"/>
+            </StackPanel>
+        </Grid>
+        <Grid x:Name="FavoritesPage" Margin="0,24,0,0" Visibility="Collapsed">
+          <ListView x:Name="FavoriteSongs" Margin="0,0,0,40" ItemsSource="{Binding FavoriteResults}" SelectionMode="None" ItemContainerStyle="{StaticResource LibraryRowStyle}" ItemTemplate="{StaticResource SongRowTemplate}"/>
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" MaxWidth="440" Visibility="{Binding HasNoFavorites, Converter={StaticResource BoolVisibility}}">
+            <FontIcon Glyph="&#xEB51;" FontSize="40" Margin="0,0,0,12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            <TextBlock Text="{Binding FavoriteEmptyMessage}" FontSize="22" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center"/>
+            <TextBlock Text="{Binding FavoriteEmptyHint}" FontSize="16" TextWrapping="Wrap" TextAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+          </StackPanel>
+        </Grid>
+        <StackPanel x:Name="AppearancePanel" Grid.Row="1" Margin="0,28,0,0" Spacing="12" Visibility="Collapsed">
+          <TextBlock Text="强调色" Style="{StaticResource SubtitleTextBlockStyle}"/>
+          <RadioButton x:Name="VesperAccent" Content="Vesper（Miku 蓝）" GroupName="Accent" Checked="OnAccentChanged"/>
+          <RadioButton x:Name="SystemAccent" Content="跟随 Windows 系统强调色" GroupName="Accent" Checked="OnAccentChanged"/>
+          <TextBlock Text="曲库" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,20,0,0"/>
+          <ToggleSwitch x:Name="HideUnavailableSwitch" Header="隐藏不可用歌曲" OnContent="" OffContent="" IsOn="{Binding HideUnavailable, Mode=TwoWay}" Toggled="OnLibraryPreferenceChanged"/>
+          <TextBlock Text="隐藏后仍保留歌曲记录与收藏；重新连接歌曲目录并刷新后即可恢复。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" MaxWidth="520" HorizontalAlignment="Left"/>
+        </StackPanel>
+        </Grid>
+        <StackPanel x:Name="SongFeedbackPanel" Grid.Row="1" VerticalAlignment="Bottom" Spacing="8" Visibility="Collapsed">
+          <StackPanel x:Name="LibraryFeedback" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+            <TextBlock Text="{Binding Status}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding Status}"/>
+          </StackPanel>
+          <InfoBar IsOpen="{Binding HasProblem}" IsClosable="False" Severity="Warning" Message="{Binding Problem}"/>
+        </StackPanel>
+        <InfoBar x:Name="PreferenceNotice" Grid.Row="1" VerticalAlignment="Bottom" Severity="Warning" IsOpen="False" Message="界面偏好未能保存，下次启动可能恢复默认。"/>
+      </Grid>
+    </NavigationView>
+  </Grid>
+</Window>
