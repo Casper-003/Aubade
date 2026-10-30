@@ -32,6 +32,7 @@ public sealed partial class MainWindow
     private int queueAvailabilityRevision;
     private double queueScrollOffset, queueDragScroll;
     private Guid? queueDragId;
+    private readonly HashSet<TextBlock> queueScrollingTitles = [];
 
     private void InitializeQueuePresentation()
     {
@@ -88,6 +89,7 @@ public sealed partial class MainWindow
         AppWindow.Closing -= OnQueueWindowClosing;
         foreach (var row in queueRows) row.Dispose();
         currentQueueRow?.Dispose();
+        queueScrollingTitles.Clear();
     }
 
     private void OnQueueCollectionChanged(object? sender, NotifyCollectionChangedEventArgs args) => RefreshQueuePresentation();
@@ -153,7 +155,8 @@ public sealed partial class MainWindow
     private void OnQueueOutsidePressed(object sender, PointerRoutedEventArgs args) { args.Handled = true; SetQueueOpen(false); }
     private void OnQueueRootKeyDown(object sender, KeyRoutedEventArgs args)
     { if (queuePanelOpen && args.Key == VirtualKey.Escape) { SetQueueOpen(false); args.Handled = true; } }
-    private double QueueCardWidth => Math.Clamp(BrowserCards.ActualWidth - 36 - 320 - 16, 264, 400);
+    private double QueueCardGutter => QueueCard.Margin.Left + QueueCard.Margin.Right;
+    private double QueueCardWidth => Math.Clamp(BrowserCards.ActualWidth - 36 - 320 - QueueCardGutter, 264, 400);
 
     private void SetQueueOpen(bool open)
     {
@@ -166,7 +169,7 @@ public sealed partial class MainWindow
         QueueCardHost.Width = from;
         QueueCardHost.Visibility = Visibility.Visible;
         QueueCard.Width = QueueCardWidth;
-        double target = open ? QueueCard.Width + 16 : 0;
+        double target = open ? QueueCard.Width + QueueCardGutter : 0;
         var storyboard = new Storyboard();
         var animation = new DoubleAnimation { From = from, To = target, Duration = TimeSpan.FromMilliseconds(220), EnableDependentAnimation = true,
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
@@ -176,7 +179,7 @@ public sealed partial class MainWindow
             if (!ReferenceEquals(queueLayoutAnimation, storyboard)) return;
             storyboard.Stop(); queueLayoutAnimation = null;
             if (queuePanelOpen) QueueCard.Width = QueueCardWidth;
-            QueueCardHost.Width = queuePanelOpen ? QueueCard.Width + 16 : 0;
+            QueueCardHost.Width = queuePanelOpen ? QueueCard.Width + QueueCardGutter : 0;
             if (!queuePanelOpen) { QueueCardHost.Visibility = Visibility.Collapsed; QueueOpenButton.Focus(FocusState.Programmatic); }
             else if (FindChild<ScrollViewer>(QueueSongs) is { } scroll) scroll.ChangeView(null, queueScrollOffset, null, true);
         };
@@ -188,7 +191,7 @@ public sealed partial class MainWindow
     private void OnQueueLayoutChanged(object sender, SizeChangedEventArgs args)
     {
         if (!queuePanelOpen || queueLayoutAnimation is not null) return;
-        QueueCard.Width = QueueCardWidth; QueueCardHost.Width = QueueCard.Width + 16;
+        QueueCard.Width = QueueCardWidth; QueueCardHost.Width = QueueCard.Width + QueueCardGutter;
     }
     private void OnQueueHostSizeChanged(object sender, SizeChangedEventArgs args) =>
         QueueCardHost.Clip = new RectangleGeometry { Rect = new Rect(0, 0, Math.Max(0, args.NewSize.Width), Math.Max(0, args.NewSize.Height)) };
@@ -296,7 +299,11 @@ public sealed partial class MainWindow
 
     private void OnQueueTitleEntered(object sender, PointerRoutedEventArgs args)
     {
-        if (sender is not Grid host || host.Children.OfType<TextBlock>().FirstOrDefault() is not { } title) return;
+        if (sender is Grid host) StartQueueTitleMarquee(host);
+    }
+    private void StartQueueTitleMarquee(Grid host)
+    {
+        if (host.Children.OfType<TextBlock>().FirstOrDefault() is not { } title) return;
         var measure = new TextBlock { Text = title.Text, FontFamily = title.FontFamily, FontSize = title.FontSize, FontWeight = title.FontWeight };
         measure.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double overflow = measure.DesiredSize.Width - host.ActualWidth;
@@ -305,21 +312,32 @@ public sealed partial class MainWindow
         title.Width = measure.DesiredSize.Width; title.TextTrimming = TextTrimming.None;
         ElementCompositionPreview.SetIsTranslationEnabled(title, true);
         var visual = ElementCompositionPreview.GetElementVisual(title);
+        visual.Properties.InsertVector3("Translation", Vector3.Zero);
         var animation = visual.Compositor.CreateScalarKeyFrameAnimation();
         animation.InsertKeyFrame(0, 0); animation.InsertKeyFrame(.15f, 0); animation.InsertKeyFrame(.85f, (float)-overflow); animation.InsertKeyFrame(1, (float)-overflow);
         animation.Duration = TimeSpan.FromSeconds(Math.Max(3, overflow / 30 + 1.5)); animation.IterationBehavior = AnimationIterationBehavior.Forever;
         visual.StartAnimation("Translation.X", animation);
+        queueScrollingTitles.Add(title);
     }
     private void OnQueueTitleExited(object sender, PointerRoutedEventArgs args)
     {
         if (sender is Grid host) ResetQueueTitle(host);
     }
-    private static void ResetQueueTitle(Grid host)
+    private void ResetQueueTitle(Grid host)
     {
         if (host.Children.OfType<TextBlock>().FirstOrDefault() is not { } title) return;
-        var visual = ElementCompositionPreview.GetElementVisual(title); visual.StopAnimation("Translation.X"); visual.Properties.InsertVector3("Translation", Vector3.Zero);
+        // Translation is an opt-in property, not a native Visual property. A newly
+        // realized row has no title animation to stop; stopping that path can fail fast.
+        if (queueScrollingTitles.Remove(title) && !closed)
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(title);
+            visual.StopAnimation("Translation.X"); visual.Properties.InsertVector3("Translation", Vector3.Zero);
+        }
         title.ClearValue(FrameworkElement.WidthProperty); title.TextTrimming = TextTrimming.CharacterEllipsis; host.Clip = null;
     }
+
+    private void OnQueueRowUnloaded(object sender, RoutedEventArgs args)
+    { if (sender is FrameworkElement row && row.FindName("QueueTitleViewport") is Grid host) ResetQueueTitle(host); }
 
     private void ShowQueueAdded(LibrarySongItem song, FrameworkElement? origin)
     {
@@ -330,8 +348,9 @@ public sealed partial class MainWindow
         Point end = QueueOpenButton.TransformToVisual(Root).TransformPoint(new Point(18, 18));
         var note = new TextBlock { Text = "♪", FontSize = 24, Foreground = (Brush)Navigation.Resources["NavigationViewSelectionIndicatorForeground"] };
         Canvas.SetLeft(note, start.X); Canvas.SetTop(note, start.Y); QueueFlightLayer.Children.Add(note);
-        var visual = ElementCompositionPreview.GetElementVisual(note); var compositor = visual.Compositor;
         ElementCompositionPreview.SetIsTranslationEnabled(note, true);
+        var visual = ElementCompositionPreview.GetElementVisual(note); var compositor = visual.Compositor;
+        visual.Properties.InsertVector3("Translation", Vector3.Zero);
         var flight = compositor.CreateVector3KeyFrameAnimation();
         flight.InsertKeyFrame(0, Vector3.Zero); flight.InsertKeyFrame(.5f, new((float)(end.X - start.X) / 2, (float)(end.Y - start.Y) / 2 - 32, 0)); flight.InsertKeyFrame(1, new((float)(end.X - start.X), (float)(end.Y - start.Y), 0)); flight.Duration = TimeSpan.FromMilliseconds(360);
         var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);

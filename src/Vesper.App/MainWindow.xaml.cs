@@ -76,6 +76,11 @@ public sealed partial class MainWindow : Window
         if (Navigation.SettingsItem is NavigationViewItem settingsItem) settingsItem.Content = "设置";
         ApplyTheme(); UpdateTitleLayout();
         if (!canSave) PreferenceNotice.IsOpen = true;
+        if (Environment.GetEnvironmentVariable("VESPER_QUEUE_CHECK_PATH") is { Length: > 0 } queueCheckPath)
+        {
+            if (!libraryInitialized) { libraryInitialized = true; await RunQueueRuntimeChecksAsync(queueCheckPath); }
+            return;
+        }
         if (Environment.GetEnvironmentVariable("VESPER_RUNTIME_CHECK_PATH") is { Length: > 0 })
         {
             if (!libraryInitialized) { libraryInitialized = true; await RunOverviewRuntimeChecksAsync(); }

@@ -95,7 +95,7 @@
       </DataTemplate>
       <DataTemplate x:Key="QueueRowTemplate" x:DataType="local:QueueSongItem">
         <Grid Height="72" Padding="6,8" ColumnSpacing="8" Background="Transparent"
-              Opacity="{x:Bind RowOpacity, Mode=OneWay}" Loaded="OnQueueRowLoaded"
+              Opacity="{x:Bind RowOpacity, Mode=OneWay}" Loaded="OnQueueRowLoaded" Unloaded="OnQueueRowUnloaded"
               PointerEntered="OnQueueRowEntered" PointerExited="OnQueueRowExited"
               GotFocus="OnQueueRowFocused" LostFocus="OnQueueRowUnfocused" ContextRequested="OnQueueContextRequested"
               AllowDrop="True" DragOver="OnQueueRowDragOver" DragLeave="OnQueueRowDragLeave" Drop="OnQueueRowDrop">
@@ -266,7 +266,7 @@
       </Border>
       <Border x:Name="QueueOutsideDismiss" Grid.Column="0" Background="Transparent" Visibility="Collapsed" PointerPressed="OnQueueOutsidePressed"/>
       <Grid x:Name="QueueCardHost" Grid.Column="1" Width="0" Visibility="Collapsed" SizeChanged="OnQueueHostSizeChanged">
-        <Border x:Name="QueueCard" Width="400" Margin="8" HorizontalAlignment="Right" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+        <Border x:Name="QueueCard" Width="400" Margin="4,0" HorizontalAlignment="Right" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
           <Border.Shadow><ThemeShadow/></Border.Shadow>
           <Grid Padding="12" RowSpacing="12">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
