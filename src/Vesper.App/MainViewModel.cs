@@ -98,6 +98,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         this.scanner = scanner ?? ((directories, previous, cache, progress, token) =>
             LibraryScanner.ScanAsync(directories, previous, token, cache, progress));
         clock = timeProvider ?? TimeProvider.System;
+        Queue.Pending.CollectionChanged += (_, _) => OnQueueChanged();
+        Queue.PropertyChanged += (_, args) => { if (args.PropertyName == nameof(PlaybackQueue.Current)) OnQueueChanged(); };
     }
 
     public async Task InitializeAsync()
@@ -115,6 +117,15 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
             Library.ScanCache ??= new(StringComparer.OrdinalIgnoreCase);
             Library.FavoriteAddedAt ??= [];
             Library.Details ??= [];
+            Library.PendingQueue ??= [];
+            var restoredQueue = (Library.CurrentQueueSong is { } unfinished
+                ? new[] { unfinished }.Concat(Library.PendingQueue.Where(entry => entry.Id != unfinished.Id))
+                : Library.PendingQueue).ToArray();
+            if (restoredQueue.Any(entry => entry is null || entry.Id == Guid.Empty || string.IsNullOrWhiteSpace(entry.SongId) || entry.Title is null)
+                || restoredQueue.Select(entry => entry.Id).Distinct().Count() != restoredQueue.Length)
+                throw new InvalidDataException("待播记录结构不完整。");
+            foreach (var entry in restoredQueue) Queue.Pending.Add(entry);
+            CaptureQueue();
             if (Library.Details.Values.Any(value => value is null)) throw new InvalidDataException("歌曲资料记录不完整。");
             Song[] loaded = Library.Songs.ToArray();
             availability = await Task.Run(() => GetAvailability(loaded));
@@ -294,9 +305,37 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void AddToQueue(LibrarySongItem item)
     {
+        if (ReadOnly || !initialized || disposed) return;
         if (!item.Song.IsAvailable) { ReportProblem("文件不可用，请刷新曲库后重试。"); return; }
         Queue.Add(item.Song with { Title = item.Title }); Status = $"已加入待播 · 第 {Queue.Pending.Count} 位 · {item.Title}";
     }
+
+    private Task queueWrite = Task.CompletedTask;
+    private void CaptureQueue()
+    {
+        Library.CurrentQueueSong = Queue.Current;
+        Library.PendingQueue = Queue.Pending.Where(entry => entry.Id != Queue.Current?.Id).ToList();
+    }
+    private void OnQueueChanged()
+    {
+        if (!initialized || ReadOnly || disposed) return;
+        CaptureQueue();
+        queueWrite = SaveQueueAsync();
+    }
+    private async Task SaveQueueAsync()
+    {
+        try { await Store.SaveAsync(Library); if (Problem.StartsWith("待播队列保存失败", StringComparison.Ordinal)) Problem = ""; }
+        catch (Exception ex) { ReportProblem($"待播队列保存失败：{ex.Message}"); }
+    }
+    public async Task<bool> FlushQueueAsync()
+    {
+        if (!initialized || ReadOnly) return true;
+        await queueWrite;
+        CaptureQueue();
+        try { await Store.SaveAsync(Library); if (Problem.StartsWith("待播队列保存失败", StringComparison.Ordinal)) Problem = ""; return true; }
+        catch (Exception ex) { ReportProblem($"待播队列保存失败：{ex.Message}"); return false; }
+    }
+
     public void ReportProblem(string message) { Problem = message; Status = "操作未完成"; }
 
     public void BeginMetadataRead()

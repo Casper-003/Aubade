@@ -42,6 +42,7 @@ public sealed partial class MainWindow : Window
             responsivenessTrace = new(DispatcherQueue, tracePath, GetOverviewDiagnostics);
         PageArea.DataContext = viewModel;
         InitializeLibraryPresentation();
+        InitializeQueuePresentation();
         viewModel.HideUnavailable = preferences.HideUnavailable;
         SystemBackdrop = new MicaBackdrop();
         ExtendsContentIntoTitleBar = true;
@@ -65,7 +66,7 @@ public sealed partial class MainWindow : Window
             SavePreferences();
         });
         systemUi.ColorValuesChanged += OnSystemColorsChanged;
-        Closed += (_, _) => { closed = true; responsivenessTrace?.Dispose(); systemUi.ColorValuesChanged -= OnSystemColorsChanged; CloseLibraryPresentation(); };
+        Closed += (_, _) => { closed = true; responsivenessTrace?.Dispose(); systemUi.ColorValuesChanged -= OnSystemColorsChanged; CloseQueuePresentation(); CloseLibraryPresentation(); };
         Activated += (_, _) => ApplyTheme();
         ContentFrame.Navigate(typeof(ShellPage), new ShellNavigationRequest("首页", this), new EntranceNavigationTransitionInfo());
     }
@@ -88,6 +89,7 @@ public sealed partial class MainWindow : Window
                 Navigation.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(item =>
                     (string)item.Tag == Environment.GetEnvironmentVariable("VESPER_PREVIEW_PAGE")) is { } previewItem)
                 Navigation.SelectedItem = previewItem;
+            if (!closed && Environment.GetEnvironmentVariable("VESPER_PREVIEW_QUEUE") == "1") SetQueueOpen(true);
         }
     }
 
@@ -152,6 +154,7 @@ public sealed partial class MainWindow : Window
 
     private void OnFrameNavigated(object sender, NavigationEventArgs e)
     {
+        SetQueueOpen(false);
         if (e.Parameter is not ShellNavigationRequest request) return;
         string page = request.Key;
         changingSelection = true;

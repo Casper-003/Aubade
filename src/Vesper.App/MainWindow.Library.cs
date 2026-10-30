@@ -62,6 +62,7 @@ public sealed partial class MainWindow
             activityDisplay.Request(new(viewModel.HasBackgroundActivity, viewModel.ActivityLabel, viewModel.ActivityTooltip,
                 viewModel.ActivityGlyph), activityClock.Elapsed);
         if (e.PropertyName != nameof(MainViewModel.Status)) return;
+        if (viewModel.Status.StartsWith("已加入待播", StringComparison.Ordinal)) return;
         libraryFeedbackTimer.Stop();
         LibraryFeedback.Visibility = Visibility.Visible;
         libraryFeedbackTimer.Start();
@@ -127,10 +128,10 @@ public sealed partial class MainWindow
     private async void OnQueueSong(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: LibrarySongItem song }) return;
-        await QueueSongAsync(song);
+        await QueueSongAsync(song, sender as FrameworkElement);
     }
 
-    internal async Task QueueSongAsync(LibrarySongItem song)
+    internal async Task QueueSongAsync(LibrarySongItem song, FrameworkElement? origin = null)
     {
         int position = viewModel.Queue.Pending.ToList().FindIndex(entry => entry.SongId == song.Song.Id);
         if (position >= 0)
@@ -144,7 +145,9 @@ public sealed partial class MainWindow
             };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         }
+        int previousCount = viewModel.Queue.Pending.Count;
         viewModel.AddToQueue(song);
+        if (viewModel.Queue.Pending.Count > previousCount) ShowQueueAdded(song, origin);
     }
 
     private void OnSongRowLoaded(object sender, RoutedEventArgs e)

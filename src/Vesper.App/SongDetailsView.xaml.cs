@@ -49,7 +49,7 @@ public sealed partial class SongDetailsView : UserControl
     private async void OnFavorite(object sender, RoutedEventArgs e)
     { if (Song is { } song) await host.Model.ToggleFavoriteAsync(song); }
     private async void OnQueue(object sender, RoutedEventArgs e)
-    { if (Song is { } song) await host.QueueSongAsync(song); }
+    { if (Song is { } song) await host.QueueSongAsync(song, sender as FrameworkElement); }
 
     private async void OnEdit(object sender, RoutedEventArgs e)
     {

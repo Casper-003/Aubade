@@ -93,6 +93,35 @@
           </StackPanel>
         </local:SongRowSurface>
       </DataTemplate>
+      <DataTemplate x:Key="QueueRowTemplate" x:DataType="local:QueueSongItem">
+        <Grid Height="72" Padding="6,8" ColumnSpacing="8" Background="Transparent"
+              Opacity="{x:Bind RowOpacity, Mode=OneWay}" Loaded="OnQueueRowLoaded"
+              PointerEntered="OnQueueRowEntered" PointerExited="OnQueueRowExited"
+              GotFocus="OnQueueRowFocused" LostFocus="OnQueueRowUnfocused" ContextRequested="OnQueueContextRequested"
+              AllowDrop="True" DragOver="OnQueueRowDragOver" DragLeave="OnQueueRowDragLeave" Drop="OnQueueRowDrop">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="20"/><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <TextBlock Text="{x:Bind Number, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+          <Button Grid.Column="1" Width="48" Height="48" Padding="0" Click="OnQueueOpenDetails" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="查看歌曲详情" AutomationProperties.Name="查看歌曲详情">
+            <Border Width="48" Height="48" CornerRadius="4" Background="{ThemeResource ControlFillColorSecondaryBrush}"><Grid>
+              <FontIcon Glyph="&#xE93C;" FontSize="22" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Visibility="{x:Bind HasNoCover, Mode=OneWay}"/>
+              <Image Source="{Binding Cover}" Stretch="UniformToFill" Visibility="{x:Bind HasCover, Mode=OneWay}"/>
+            </Grid></Border>
+          </Button>
+          <StackPanel Grid.Column="2" Spacing="3" VerticalAlignment="Center">
+            <Grid x:Name="QueueTitleViewport" Background="Transparent" PointerEntered="OnQueueTitleEntered" PointerExited="OnQueueTitleExited" Tapped="OnQueueTitleTapped">
+              <TextBlock Text="{x:Bind Title, Mode=OneWay}" FontSize="14" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind Title, Mode=OneWay}"/>
+            </Grid>
+            <TextBlock Text="{x:Bind Artist, Mode=OneWay}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            <TextBlock Text="文件不可用" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{x:Bind IsUnavailable, Mode=OneWay}"/>
+          </StackPanel>
+          <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{x:Bind IsPending, Mode=OneWay}">
+            <Button Width="28" Height="32" Padding="0" Click="OnQueueRemove" Style="{StaticResource SubtleButtonStyle}" Opacity="{x:Bind ActionsOpacity, Mode=OneWay}" IsHitTestVisible="{x:Bind ActionsVisible, Mode=OneWay}" ToolTipService.ToolTip="移除待播" AutomationProperties.Name="移除待播"><FontIcon Glyph="&#xE738;" FontSize="14"/></Button>
+            <Button Width="24" Height="32" Padding="0" CanDrag="True" DragStarting="OnQueueDragStarting" DropCompleted="OnQueueDragCompleted" KeyDown="OnQueueHandleKeyDown" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="拖动调整顺序；聚焦后可用上下方向键" AutomationProperties.Name="调整待播顺序"><FontIcon Glyph="&#xE700;" FontSize="14"/></Button>
+          </StackPanel>
+          <Border Grid.ColumnSpan="4" Height="2" VerticalAlignment="Top" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{x:Bind DropBefore, Mode=OneWay}" IsHitTestVisible="False"/>
+          <Border Grid.ColumnSpan="4" Height="2" VerticalAlignment="Bottom" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{x:Bind DropAfter, Mode=OneWay}" IsHitTestVisible="False"/>
+        </Grid>
+      </DataTemplate>
     </Grid.Resources>
     <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="*"/></Grid.RowDefinitions>
     <Grid x:Name="AppTitleBar" Background="Transparent">
@@ -106,6 +135,7 @@
         IsBackButtonVisible="Collapsed" IsSettingsVisible="True" SelectionChanged="OnSelectionChanged">
       <NavigationView.Resources>
         <SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="#39C5BB"/>
+        <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="Transparent"/>
         <CornerRadius x:Key="NavigationViewContentGridCornerRadius">8</CornerRadius>
         <Thickness x:Key="NavigationViewContentMargin">0,0,4,4</Thickness>
       </NavigationView.Resources>
@@ -119,6 +149,9 @@
       <NavigationView.FooterMenuItems>
         <NavigationViewItem x:Name="ActivityNavigationItem" Content="{Binding Label}" Style="{StaticResource ActivityItemStyle}" SelectsOnInvoked="False" ToolTipService.ToolTip="{Binding Tooltip}" AutomationProperties.Name="{Binding Label}"/>
       </NavigationView.FooterMenuItems>
+      <Grid x:Name="BrowserCards" SizeChanged="OnQueueLayoutChanged">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
+      <Border x:Name="BrowserCard" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
       <Grid x:Name="PageArea" Padding="28,24" Background="Transparent">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <Grid x:Name="PageHeading" ColumnSpacing="20" MinHeight="36">
@@ -230,6 +263,43 @@
         </StackPanel>
         <InfoBar x:Name="PreferenceNotice" Grid.Row="1" VerticalAlignment="Bottom" Severity="Warning" IsOpen="False" Message="界面偏好未能保存，下次启动可能恢复默认。"/>
       </Grid>
+      </Border>
+      <Border x:Name="QueueOutsideDismiss" Grid.Column="0" Background="Transparent" Visibility="Collapsed" PointerPressed="OnQueueOutsidePressed"/>
+      <Grid x:Name="QueueCardHost" Grid.Column="1" Width="0" Visibility="Collapsed" SizeChanged="OnQueueHostSizeChanged">
+        <Border x:Name="QueueCard" Width="400" Margin="8" HorizontalAlignment="Right" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+          <Border.Shadow><ThemeShadow/></Border.Shadow>
+          <Grid Padding="12" RowSpacing="12">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+            <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <TextBlock Text="待播曲目" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <TextBlock x:Name="QueueHeadingCount" Grid.Column="1" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+              <Button x:Name="QueueCloseButton" Grid.Column="2" Width="32" Height="32" Padding="0" Click="OnQueueClose" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="收起待播曲目" AutomationProperties.Name="收起待播曲目"><FontIcon Glyph="&#xE8BB;" FontSize="14"/></Button>
+            </Grid>
+            <StackPanel x:Name="QueueCurrentArea" Grid.Row="1" Visibility="Collapsed" Spacing="4">
+              <Grid><TextBlock Text="正在演唱" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/><TextBlock x:Name="QueueCurrentState" HorizontalAlignment="Right" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></Grid>
+              <ContentControl x:Name="QueueCurrentContent" HorizontalContentAlignment="Stretch" ContentTemplate="{StaticResource QueueRowTemplate}"/>
+            </StackPanel>
+            <Grid Grid.Row="2">
+              <ListView x:Name="QueueSongs" SelectionMode="None" HorizontalContentAlignment="Stretch" ItemContainerStyle="{StaticResource LibraryRowStyle}" ItemTemplate="{StaticResource QueueRowTemplate}" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AllowDrop="True" DragOver="OnQueueListDragOver" Drop="OnQueueListDrop"><ListView.ItemContainerTransitions><TransitionCollection/></ListView.ItemContainerTransitions></ListView>
+              <StackPanel x:Name="QueueEmpty" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" MaxWidth="250">
+                <FontIcon Glyph="&#xE8EF;" FontSize="36" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <TextBlock x:Name="QueueEmptyTitle" Text="还没有待播歌曲" FontSize="18" TextWrapping="Wrap" TextAlignment="Center"/>
+                <TextBlock Text="点击歌曲旁的 ＋ 加入待播" FontSize="14" TextWrapping="Wrap" TextAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+              </StackPanel>
+            </Grid>
+          </Grid>
+        </Border>
+      </Grid>
+      <Button x:Name="QueueOpenButton" Grid.Column="2" VerticalAlignment="Top" Width="36" Padding="0,12" Click="OnQueueToggle" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="待播曲目" AutomationProperties.Name="展开待播曲目">
+        <StackPanel Spacing="8"><FontIcon Glyph="&#xE8EF;" FontSize="16"/><TextBlock x:Name="QueueBadge" Text="0" FontSize="12" HorizontalAlignment="Center"/></StackPanel>
+      </Button>
+      </Grid>
     </NavigationView>
+    <Canvas x:Name="QueueFlightLayer" Grid.RowSpan="2" IsHitTestVisible="False"/>
+    <StackPanel Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="16,0,16,20" Spacing="8">
+      <InfoBar x:Name="QueueSaveWarning" MaxWidth="520" Severity="Warning" IsOpen="False" IsClosable="False"/>
+      <Border x:Name="QueueAdditionToast" Visibility="Collapsed" Padding="16,10" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"><TextBlock x:Name="QueueAdditionMessage" TextWrapping="Wrap" MaxWidth="500"/></Border>
+      <Border x:Name="QueueUndoToast" Visibility="Collapsed" Padding="16,6" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"><StackPanel Orientation="Horizontal" Spacing="12"><TextBlock Text="已移除" VerticalAlignment="Center"/><Button Content="撤销" Click="OnQueueUndo" Style="{StaticResource SubtleButtonStyle}"/></StackPanel></Border>
+    </StackPanel>
   </Grid>
 </Window>
