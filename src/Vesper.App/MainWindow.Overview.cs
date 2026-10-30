@@ -12,7 +12,8 @@ namespace Vesper.App;
 public sealed partial class MainWindow
 {
     // 保持滚动属性集的强引用；滚动动画全部由合成线程求值。
-    private sealed record OverviewMotion(ScrollViewer Viewer, CompositionPropertySet Scroll, CompositionPropertySet Metrics);
+    private sealed record OverviewMotion(ScrollViewer Viewer, CompositionPropertySet Scroll, CompositionPropertySet Metrics,
+        double TitleWidthPerFontUnit, double TitleHeightPerFontUnit, double TitleLineHeightPerFontUnit);
     private readonly Dictionary<ListView, OverviewMotion> overviewMotions = [];
     private bool stripeRefreshQueued;
     private bool overviewScrolling;
@@ -110,9 +111,10 @@ public sealed partial class MainWindow
         Grid page = favorite ? FavoritesPage : LibraryPage;
         overviewMotions.TryGetValue(list, out var existing);
         var scroll = existing?.Viewer ?? FindChild<ScrollViewer>(list);
-        if (page.ActualHeight <= 0 || scroll is null) return;
+        if (page.ActualHeight <= 0 || page.ActualWidth <= 0 || scroll is null) return;
         Grid hero = favorite ? FavoriteHeroLayer : LibraryHeroLayer;
         Canvas titleMotion = favorite ? FavoriteTitleMotion : LibraryTitleMotion;
+        TextBlock title = favorite ? FavoriteTitleBold : LibraryTitleBold;
         Grid spacer = favorite ? FavoriteHeaderSpace : LibraryHeaderSpace;
         float height = (float)Math.Max(64, page.ActualHeight * .382);
         hero.Height = height;
@@ -121,15 +123,21 @@ public sealed partial class MainWindow
             footer.Height = Math.Max(0, page.ActualHeight - 48 - list.Items.Count * 68 - (favorite ? 16 : 52));
         if (existing is not null)
         {
-            existing.Metrics.InsertScalar("Height", height);
+            UpdateOverviewTitleLayout(existing, title, page.ActualWidth - titleMotion.Margin.Left - 32, height);
             return;
         }
         var visual = ElementCompositionPreview.GetElementVisual(hero);
         var compositor = visual.Compositor;
         var properties = ElementCompositionPreview.GetScrollViewerManipulationPropertySet(scroll);
         var metrics = compositor.CreatePropertySet();
-        metrics.InsertScalar("Height", height);
-        overviewMotions[list] = new(scroll, properties, metrics);
+        // Measure the actual typeface once, without a width constraint. Window resizing then
+        // fits both the title's width and its line box; scrolling only changes composition properties.
+        title.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        var motion = new OverviewMotion(scroll, properties, metrics,
+            title.DesiredSize.Width / title.FontSize, title.DesiredSize.Height / title.FontSize,
+            title.LineHeight / title.FontSize);
+        overviewMotions[list] = motion;
+        UpdateOverviewTitleLayout(motion, title, page.ActualWidth - titleMotion.Margin.Left - 32, height);
         scroll.ViewChanged += OnOverviewViewChanged;
         const string progress = "Clamp(-scroll.Translation.Y / (metrics.Height - 48), 0, 1)";
         ExpressionAnimation Expression(string formula)
@@ -143,10 +151,10 @@ public sealed partial class MainWindow
         visual.Clip = clip;
         clip.StartAnimation("BottomInset", Expression($"({progress}) * (metrics.Height - 48)"));
         // Animate the shared title host through XAML facade properties, avoiding layout-owned offsets/scales.
-        var translation = Expression($"Vector3(0, (metrics.Height - 132) * (1 - ({progress})) + 9 * ({progress}), 0)");
+        var translation = Expression($"Vector3(0, (metrics.Height - metrics.TitleHeight - 16) * (1 - ({progress})) + 9 * ({progress}), 0)");
         translation.Target = "Translation";
         titleMotion.StartAnimation(translation);
-        var scale = Expression($"Vector3(1 - ({progress}) * 0.75, 1 - ({progress}) * 0.75, 1)");
+        var scale = Expression($"Vector3(1 + ({progress}) * (metrics.CompactTitleScale - 1), 1 + ({progress}) * (metrics.CompactTitleScale - 1), 1)");
         scale.Target = "Scale";
         titleMotion.StartAnimation(scale);
         if (!favorite)
@@ -156,6 +164,23 @@ public sealed partial class MainWindow
                 Expression($"metrics.Height * (1 - ({progress}))"));
         }
     }
+
+    private static void UpdateOverviewTitleLayout(OverviewMotion motion, TextBlock title, double availableWidth, float height)
+    {
+        // Use 46% of the expanded header's height for the title's line box, then
+        // reduce the font if the full word needs more horizontal space.
+        double fontSize = Math.Max(1, Math.Min(height * .46 / Math.Max(.01, motion.TitleHeightPerFontUnit),
+            Math.Max(1, availableWidth - 2) / Math.Max(.01, motion.TitleWidthPerFontUnit)));
+        if (Math.Abs(title.FontSize - fontSize) > .01)
+        {
+            title.FontSize = fontSize;
+            title.LineHeight = fontSize * motion.TitleLineHeightPerFontUnit;
+        }
+        motion.Metrics.InsertScalar("Height", height);
+        motion.Metrics.InsertScalar("TitleHeight", (float)(title.FontSize * motion.TitleHeightPerFontUnit));
+        motion.Metrics.InsertScalar("CompactTitleScale", (float)(24 / title.FontSize));
+    }
+
     private void OnOverviewContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
         if (args.ItemContainer.ContentTemplateRoot is SongRowSurface surface)
