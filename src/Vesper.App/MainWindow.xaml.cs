@@ -42,6 +42,7 @@ public sealed partial class MainWindow : Window
             responsivenessTrace = new(DispatcherQueue, tracePath, GetOverviewDiagnostics);
         PageArea.DataContext = viewModel;
         InitializeLibraryPresentation();
+        InitializeQueuePresentation();
         viewModel.HideUnavailable = preferences.HideUnavailable;
         SystemBackdrop = new MicaBackdrop();
         ExtendsContentIntoTitleBar = true;
@@ -65,7 +66,7 @@ public sealed partial class MainWindow : Window
             SavePreferences();
         });
         systemUi.ColorValuesChanged += OnSystemColorsChanged;
-        Closed += (_, _) => { closed = true; responsivenessTrace?.Dispose(); systemUi.ColorValuesChanged -= OnSystemColorsChanged; CloseLibraryPresentation(); };
+        Closed += (_, _) => { closed = true; responsivenessTrace?.Dispose(); systemUi.ColorValuesChanged -= OnSystemColorsChanged; CloseQueuePresentation(); CloseOverviewScrollbars(); CloseLibraryPresentation(); };
         Activated += (_, _) => ApplyTheme();
         ContentFrame.Navigate(typeof(ShellPage), new ShellNavigationRequest("首页", this), new EntranceNavigationTransitionInfo());
     }
@@ -75,6 +76,11 @@ public sealed partial class MainWindow : Window
         if (Navigation.SettingsItem is NavigationViewItem settingsItem) settingsItem.Content = "设置";
         ApplyTheme(); UpdateTitleLayout();
         if (!canSave) PreferenceNotice.IsOpen = true;
+        if (Environment.GetEnvironmentVariable("VESPER_QUEUE_CHECK_PATH") is { Length: > 0 } queueCheckPath)
+        {
+            if (!libraryInitialized) { libraryInitialized = true; await RunQueueRuntimeChecksAsync(queueCheckPath); }
+            return;
+        }
         if (Environment.GetEnvironmentVariable("VESPER_RUNTIME_CHECK_PATH") is { Length: > 0 })
         {
             if (!libraryInitialized) { libraryInitialized = true; await RunOverviewRuntimeChecksAsync(); }
@@ -88,6 +94,7 @@ public sealed partial class MainWindow : Window
                 Navigation.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(item =>
                     (string)item.Tag == Environment.GetEnvironmentVariable("VESPER_PREVIEW_PAGE")) is { } previewItem)
                 Navigation.SelectedItem = previewItem;
+            if (!closed && Environment.GetEnvironmentVariable("VESPER_PREVIEW_QUEUE") == "1") SetQueueOpen(true);
         }
     }
 
@@ -152,6 +159,7 @@ public sealed partial class MainWindow : Window
 
     private void OnFrameNavigated(object sender, NavigationEventArgs e)
     {
+        SetQueueOpen(false);
         if (e.Parameter is not ShellNavigationRequest request) return;
         string page = request.Key;
         changingSelection = true;

@@ -61,6 +61,8 @@ try
     queue.Add(next);
     Check(queue.State == PlaybackState.Idle && queue.Current is null,
         "队列从空变为非空不会自动开唱");
+    QueueChecks.Run(other, Check);
+    await QueueChecks.RunPersistenceAsync(root, Check);
     await File.WriteAllTextAsync(Path.Combine(root, "data", "library.json"), "{ broken json");
     bool rejected = false;
     try { await store.LoadAsync(); } catch (System.Text.Json.JsonException) { rejected = true; }

@@ -13,7 +13,11 @@ public sealed partial class MainWindow
 {
     // 保持滚动属性集的强引用；滚动动画全部由合成线程求值。
     private sealed record OverviewMotion(ScrollViewer Viewer, CompositionPropertySet Scroll, CompositionPropertySet Metrics,
-        double TitleWidthPerFontUnit, double TitleHeightPerFontUnit, double TitleLineHeightPerFontUnit);
+        double TitleWidthPerFontUnit, double TitleHeightPerFontUnit, double TitleLineHeightPerFontUnit)
+    {
+        internal float HeaderHeight = float.NaN;
+        internal double NativeTitleFontSize = double.NaN;
+    }
     private readonly Dictionary<ListView, OverviewMotion> overviewMotions = [];
     private bool stripeRefreshQueued;
     private bool overviewScrolling;
@@ -41,6 +45,7 @@ public sealed partial class MainWindow
     private void OnOverviewViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
     {
         if (closed) return;
+        UpdateOverviewScrollbarView(sender, e);
         lastOverviewScroll = Stopwatch.GetTimestamp();
         if (overviewScrolling) return;
         overviewScrolling = true;
@@ -54,6 +59,7 @@ public sealed partial class MainWindow
         overviewIdleTimer.Stop();
         overviewScrolling = false;
         if (closed) return;
+        OnOverviewScrollbarIdle();
         viewModel.SetPresentationScrolling(false);
         if (pendingMetadataRows.Count > 0) metadataRowsTimer.Start();
     }
@@ -112,6 +118,7 @@ public sealed partial class MainWindow
         overviewMotions.TryGetValue(list, out var existing);
         var scroll = existing?.Viewer ?? FindChild<ScrollViewer>(list);
         if (page.ActualHeight <= 0 || page.ActualWidth <= 0 || scroll is null) return;
+        ConfigureOverviewScrollbar(list, scroll);
         Grid hero = favorite ? FavoriteHeroLayer : LibraryHeroLayer;
         Canvas titleMotion = favorite ? FavoriteTitleMotion : LibraryTitleMotion;
         TextBlock title = favorite ? FavoriteTitleBold : LibraryTitleBold;
@@ -120,7 +127,7 @@ public sealed partial class MainWindow
         hero.Height = height;
         spacer.Height = height - 48 + (favorite ? 16 : 52);
         if (list.Footer is FrameworkElement footer)
-            footer.Height = Math.Max(0, page.ActualHeight - 48 - list.Items.Count * 68 - (favorite ? 16 : 52));
+            footer.Height = 0;
         if (existing is not null)
         {
             UpdateOverviewTitleLayout(existing, title, page.ActualWidth - titleMotion.Margin.Left - 32, height);
@@ -130,8 +137,8 @@ public sealed partial class MainWindow
         var compositor = visual.Compositor;
         var properties = ElementCompositionPreview.GetScrollViewerManipulationPropertySet(scroll);
         var metrics = compositor.CreatePropertySet();
-        // Measure the actual typeface once, without a width constraint. Window resizing then
-        // fits both the title's width and its line box; scrolling only changes composition properties.
+        // Measure the typeface proportions once. Background changes set the native
+        // text size; only scrolling scales that correctly sized text down.
         title.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
         var motion = new OverviewMotion(scroll, properties, metrics,
             title.DesiredSize.Width / title.FontSize, title.DesiredSize.Height / title.FontSize,
@@ -154,7 +161,8 @@ public sealed partial class MainWindow
         var translation = Expression($"Vector3(0, (metrics.Height - metrics.TitleHeight - 16) * (1 - ({progress})) + 9 * ({progress}), 0)");
         translation.Target = "Translation";
         titleMotion.StartAnimation(translation);
-        var scale = Expression($"Vector3(1 + ({progress}) * (metrics.CompactTitleScale - 1), 1 + ({progress}) * (metrics.CompactTitleScale - 1), 1)");
+        string visibleScale = $"metrics.ExpandedTitleScale * (1 - ({progress})) + metrics.CompactTitleScale * ({progress})";
+        var scale = Expression($"Vector3({visibleScale}, {visibleScale}, 1)");
         scale.Target = "Scale";
         titleMotion.StartAnimation(scale);
         if (!favorite)
@@ -167,18 +175,27 @@ public sealed partial class MainWindow
 
     private static void UpdateOverviewTitleLayout(OverviewMotion motion, TextBlock title, double availableWidth, float height)
     {
-        // Use 46% of the expanded header's height for the title's line box, then
-        // reduce the font if the full word needs more horizontal space.
-        double fontSize = Math.Max(1, Math.Min(height * .46 / Math.Max(.01, motion.TitleHeightPerFontUnit),
+        // Render native glyphs at the fitted size instead of enlarging a small cached
+        // glyph layout. An unchanged fit does not invalidate text layout again.
+        double fitFontSize = Math.Max(1, Math.Min(height * .46 / Math.Max(.01, motion.TitleHeightPerFontUnit),
             Math.Max(1, availableWidth - 2) / Math.Max(.01, motion.TitleWidthPerFontUnit)));
-        if (Math.Abs(title.FontSize - fontSize) > .01)
+        if (Math.Abs(title.FontSize - fitFontSize) > .01)
         {
-            title.FontSize = fontSize;
-            title.LineHeight = fontSize * motion.TitleLineHeightPerFontUnit;
+            title.FontSize = fitFontSize;
+            title.LineHeight = fitFontSize * motion.TitleLineHeightPerFontUnit;
         }
-        motion.Metrics.InsertScalar("Height", height);
-        motion.Metrics.InsertScalar("TitleHeight", (float)(title.FontSize * motion.TitleHeightPerFontUnit));
-        motion.Metrics.InsertScalar("CompactTitleScale", (float)(24 / title.FontSize));
+        if (motion.HeaderHeight != height)
+        {
+            motion.HeaderHeight = height;
+            motion.Metrics.InsertScalar("Height", height);
+        }
+        if (motion.NativeTitleFontSize != title.FontSize)
+        {
+            motion.NativeTitleFontSize = title.FontSize;
+            motion.Metrics.InsertScalar("TitleHeight", (float)(title.FontSize * motion.TitleHeightPerFontUnit));
+            motion.Metrics.InsertScalar("ExpandedTitleScale", 1);
+            motion.Metrics.InsertScalar("CompactTitleScale", (float)Math.Min(1, 24 / title.FontSize));
+        }
     }
 
     private void OnOverviewContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
@@ -249,5 +266,6 @@ public sealed partial class MainWindow
             if (list.ItemsPanelRoot is Panel panel)
                 foreach (var item in panel.Children.OfType<ListViewItem>())
                     if (item.ContentTemplateRoot is SongRowSurface surface) surface.RefreshHoverPalette();
+        RefreshQueueRowPalette();
     }
 }

@@ -22,6 +22,7 @@ public sealed partial class MainWindow
         var samples = new List<OverviewRuntimeSample>();
         int paintedPixelChecks = 0, maximumContainers = 0, hoverChecks = 0;
         double hoverLoopMilliseconds = 0;
+        object? layoutFeedback = null;
         try
         {
             viewModel.Results.Clear();
@@ -158,6 +159,7 @@ public sealed partial class MainWindow
                     foreach (var surface in pair) surface.SetHovered(false);
                 }
             }
+            layoutFeedback = await CheckOverviewFeedbackAsync(failures);
         }
         catch (Exception ex) { failures.Add(ex.ToString()); }
         finally
@@ -169,6 +171,7 @@ public sealed partial class MainWindow
                     Passed = failures.Count == 0, SongCount = 1007, ViewportJumps = samples.Count,
                     MaximumRealizedContainers = maximumContainers, PaintedPixelChecks = paintedPixelChecks,
                     HoverAndRecycleChecks = hoverChecks, ThousandHoverStateChangesMilliseconds = Math.Round(hoverLoopMilliseconds, 3),
+                    LayoutFeedback = layoutFeedback,
                     ElapsedMilliseconds = Math.Round(clock.Elapsed.TotalMilliseconds, 1), Samples = samples, Failures = failures,
                     Limitations = "Isolated synthetic controls; programmatic ChangeView/layout and direct hover-state calls, not physical pointer timing, media IO, interactive frame rate or visual acceptance. Pixel checks verify normal XAML stripes only; composition hover checks verify layer state/color, not rendered hover pixels."
                 };
