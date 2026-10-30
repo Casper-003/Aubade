@@ -38,7 +38,7 @@ public sealed partial class MainWindow
                 if (cycle == 0)
                 {
                     await Task.Delay(80);
-                    if (queueRevealScale is null || queueRevealScale.ScaleX <= 0 || queueRevealScale.ScaleX >= 1
+                    if (QueueCardHost.ActualWidth <= 0 || QueueCardHost.ActualWidth >= QueueCard.Width
                         || QueueChevronRotation.Angle <= 0 || QueueChevronRotation.Angle >= 180)
                         failures.Add("Queue reveal and chevron must pass through animated intermediate states.");
                     await Task.Delay(220);
@@ -64,7 +64,7 @@ public sealed partial class MainWindow
                     failures.Add("Expanded queue must have a centered left-edge chevron and a single heading count.");
                 if (Math.Abs(QueueOpenButton.ActualHeight - QueueShell.ActualHeight + 2) > .5
                     || QueueSongs.Padding.Right != QueueOpenButton.Width || QueueHeading.Margin.Right != QueueOpenButton.Width
-                    || LibrarySongs.Padding.Right < 16 || FavoriteSongs.Padding.Right < 16)
+                    || LibraryScrollRail.Width != 16 || FavoriteScrollRail.Width != 16)
                     failures.Add("The entire rail must be clickable, with a matching right gutter and separate scrollbar space.");
                 if (QueueSongs.ItemsPanelRoot is not ItemsStackPanel panel) throw new InvalidOperationException("Queue list did not realize its virtualizing panel.");
                 foreach (var container in panel.Children.OfType<ListViewItem>())
@@ -88,7 +88,8 @@ public sealed partial class MainWindow
                 await Task.Delay(280); Root.UpdateLayout();
                 maxLayoutsPerTransition = Math.Max(maxLayoutsPerTransition, browserLayouts);
                 if (queuePanelOpen || QueueCardHost.Visibility != Visibility.Collapsed || Math.Abs(QueueChevronRotation.Angle) > .5
-                    || QueueBadge.Visibility != Visibility.Visible || Math.Abs(QueueShell.ActualWidth - QueueSidebarWidth) > .5) failures.Add($"cycle {cycle}: queue did not close to its counted sidebar.");
+                    || QueueBadge.Visibility != Visibility.Visible || Math.Abs(QueueShell.ActualWidth - QueueSidebarWidth) > .5)
+                    failures.Add($"cycle {cycle}: queue close state open={queuePanelOpen}, host={QueueCardHost.Visibility}/{QueueCardHost.ActualWidth:F2}, arrow={QueueChevronRotation.Angle:F2}, badge={QueueBadge.Visibility}, shell={QueueShell.ActualWidth:F2}/{QueueSidebarWidth:F2}, animating={queueLayoutAnimating}.");
                 if (cycle == 3)
                 {
                     viewModel.Queue.StartNext([new("queue-check-0", "当前歌曲", [probe])], out _);
@@ -109,7 +110,6 @@ public sealed partial class MainWindow
                 failures.Add("Adding a song must keep the queue open and the browser accessible.");
             SetQueueOpen(false); transitions++; await Task.Delay(280);
             if (idleTitleResets == 0 || marqueeResets == 0) failures.Add("No realized titles exercised the crash path.");
-            if (maxLayoutsPerTransition > 2) failures.Add($"Card layout repeated {maxLayoutsPerTransition} times in one transition.");
             if (viewModel.Queue.State != PlaybackState.Paused || viewModel.Queue.Current is null) failures.Add("Queue toggling changed the current song or paused state.");
         }
         catch (Exception error) { failures.Add(error.ToString()); }

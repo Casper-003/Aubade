@@ -66,7 +66,7 @@ public sealed partial class MainWindow : Window
             SavePreferences();
         });
         systemUi.ColorValuesChanged += OnSystemColorsChanged;
-        Closed += (_, _) => { closed = true; responsivenessTrace?.Dispose(); systemUi.ColorValuesChanged -= OnSystemColorsChanged; CloseQueuePresentation(); CloseLibraryPresentation(); };
+        Closed += (_, _) => { closed = true; responsivenessTrace?.Dispose(); systemUi.ColorValuesChanged -= OnSystemColorsChanged; CloseQueuePresentation(); CloseOverviewScrollbars(); CloseLibraryPresentation(); };
         Activated += (_, _) => ApplyTheme();
         ContentFrame.Navigate(typeof(ShellPage), new ShellNavigationRequest("首页", this), new EntranceNavigationTransitionInfo());
     }
