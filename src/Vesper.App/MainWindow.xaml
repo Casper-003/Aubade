@@ -28,6 +28,15 @@
           </Grid>
         </ControlTemplate></Setter.Value></Setter>
       </Style>
+      <Style x:Key="QueueRailStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="UseSystemFocusVisuals" Value="True"/>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+          <Grid Background="{TemplateBinding Background}" Control.IsTemplateFocusTarget="True">
+            <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Grid>
+        </ControlTemplate></Setter.Value></Setter>
+      </Style>
       <Style x:Key="HistoryButtonStyle" TargetType="Button">
         <Setter Property="Width" Value="48"/><Setter Property="Height" Value="36"/><Setter Property="Margin" Value="4,6"/>
         <Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="{ThemeResource NavigationViewItemForeground}"/>
@@ -111,11 +120,11 @@
         </local:SongRowSurface>
       </DataTemplate>
       <DataTemplate x:Key="QueueRowTemplate" x:DataType="local:QueueSongItem">
-        <Grid Height="72" Padding="6,8" ColumnSpacing="8" Background="Transparent"
+        <local:SongRowSurface Height="72" Padding="8"
               Opacity="{x:Bind RowOpacity, Mode=OneWay}" Loaded="OnQueueRowLoaded" Unloaded="OnQueueRowUnloaded"
               PointerEntered="OnQueueRowEntered" PointerExited="OnQueueRowExited"
-              GotFocus="OnQueueRowFocused" LostFocus="OnQueueRowUnfocused" ContextRequested="OnQueueContextRequested"
-              AllowDrop="True" DragOver="OnQueueRowDragOver" DragLeave="OnQueueRowDragLeave" Drop="OnQueueRowDrop">
+              GotFocus="OnQueueRowFocused" LostFocus="OnQueueRowUnfocused" ContextRequested="OnQueueContextRequested">
+        <Grid Margin="-2,0" ColumnSpacing="8" Background="Transparent">
           <Grid.ColumnDefinitions><ColumnDefinition Width="20"/><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
           <TextBlock Text="{x:Bind Number, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
           <Button Grid.Column="1" Width="48" Height="48" Padding="0" Click="OnQueueOpenDetails" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="查看歌曲详情" AutomationProperties.Name="查看歌曲详情">
@@ -133,11 +142,10 @@
           </StackPanel>
           <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{x:Bind IsPending, Mode=OneWay}">
             <Button Width="28" Height="32" Padding="0" Click="OnQueueRemove" Style="{StaticResource SubtleButtonStyle}" Opacity="{x:Bind ActionsOpacity, Mode=OneWay}" IsHitTestVisible="{x:Bind ActionsVisible, Mode=OneWay}" ToolTipService.ToolTip="移除待播" AutomationProperties.Name="移除待播"><FontIcon Glyph="&#xE738;" FontSize="14"/></Button>
-            <ContentControl x:Name="QueueDragHandle" Width="24" Height="32" PointerPressed="OnQueueHandlePointerPressed" DragStarting="OnQueueDragStarting" DropCompleted="OnQueueDragCompleted" KeyDown="OnQueueHandleKeyDown" Style="{StaticResource QueueDragHandleStyle}" ToolTipService.ToolTip="拖动调整顺序；聚焦后可用上下方向键" AutomationProperties.Name="调整待播顺序"/>
+            <ContentControl x:Name="QueueDragHandle" Width="24" Height="32" PointerPressed="OnQueueHandlePointerPressed" KeyDown="OnQueueHandleKeyDown" Style="{StaticResource QueueDragHandleStyle}" ToolTipService.ToolTip="拖动调整顺序；聚焦后可用上下方向键" AutomationProperties.Name="调整待播顺序"/>
           </StackPanel>
-          <Border Grid.ColumnSpan="4" Height="2" VerticalAlignment="Top" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{x:Bind DropBefore, Mode=OneWay}" IsHitTestVisible="False"/>
-          <Border Grid.ColumnSpan="4" Height="2" VerticalAlignment="Bottom" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{x:Bind DropAfter, Mode=OneWay}" IsHitTestVisible="False"/>
         </Grid>
+        </local:SongRowSurface>
       </DataTemplate>
     </Grid.Resources>
     <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -172,8 +180,9 @@
       </NavigationView.FooterMenuItems>
       <Grid x:Name="BrowserCards" SizeChanged="OnQueueLayoutChanged">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <Border x:Name="BrowserCard" Style="{StaticResource ShellCardStyle}">
-      <Grid x:Name="PageArea" Padding="28,24" Background="Transparent">
+      <Grid x:Name="BrowserCard">
+      <Border x:Name="BrowserCardChrome" Style="{StaticResource ShellCardStyle}" IsHitTestVisible="False"/>
+      <Grid x:Name="PageArea" Margin="1" Padding="28,24" Background="Transparent">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <Grid x:Name="PageHeading" ColumnSpacing="20" MinHeight="36">
           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -196,7 +205,7 @@
           </StackPanel>
         </Grid>
         <Grid x:Name="LibraryPage" Grid.Row="1" Visibility="Collapsed" SizeChanged="OnOverviewSizeChanged">
-            <ListView x:Name="LibrarySongs" Margin="24,48,24,12" ItemsSource="{Binding Results}" SelectionMode="None" ScrollViewer.IsScrollInertiaEnabled="True" ScrollViewer.IsDeferredScrollingEnabled="False" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.VerticalScrollMode="Enabled" IsItemClickEnabled="True" ItemClick="OnOpenSong" Loaded="OnOverviewLoaded" ContainerContentChanging="OnOverviewContainerChanging" ItemContainerStyle="{StaticResource SongRowStyle}" ItemTemplate="{StaticResource SongRowTemplate}">
+            <ListView x:Name="LibrarySongs" Margin="24,48,24,12" Padding="0,0,16,0" ItemsSource="{Binding Results}" SelectionMode="None" ScrollViewer.IsScrollInertiaEnabled="True" ScrollViewer.IsDeferredScrollingEnabled="False" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.VerticalScrollMode="Enabled" IsItemClickEnabled="True" ItemClick="OnOpenSong" Loaded="OnOverviewLoaded" ContainerContentChanging="OnOverviewContainerChanging" ItemContainerStyle="{StaticResource SongRowStyle}" ItemTemplate="{StaticResource SongRowTemplate}">
               <ListView.ItemContainerTransitions><TransitionCollection/></ListView.ItemContainerTransitions>
             <ListView.Header>
                 <Grid x:Name="LibraryHeaderSpace" Height="280"/>
@@ -248,7 +257,7 @@
             </StackPanel>
         </Grid>
         <Grid x:Name="FavoritesPage" Visibility="Collapsed" SizeChanged="OnOverviewSizeChanged">
-          <ListView x:Name="FavoriteSongs" Margin="24,48,24,12" ItemsSource="{Binding FavoriteResults}" SelectionMode="None" ScrollViewer.IsScrollInertiaEnabled="True" ScrollViewer.IsDeferredScrollingEnabled="False" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.VerticalScrollMode="Enabled" IsItemClickEnabled="True" ItemClick="OnOpenSong" Loaded="OnOverviewLoaded" ContainerContentChanging="OnOverviewContainerChanging" ItemContainerStyle="{StaticResource SongRowStyle}" ItemTemplate="{StaticResource SongRowTemplate}">
+          <ListView x:Name="FavoriteSongs" Margin="24,48,24,12" Padding="0,0,16,0" ItemsSource="{Binding FavoriteResults}" SelectionMode="None" ScrollViewer.IsScrollInertiaEnabled="True" ScrollViewer.IsDeferredScrollingEnabled="False" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.VerticalScrollMode="Enabled" IsItemClickEnabled="True" ItemClick="OnOpenSong" Loaded="OnOverviewLoaded" ContainerContentChanging="OnOverviewContainerChanging" ItemContainerStyle="{StaticResource SongRowStyle}" ItemTemplate="{StaticResource SongRowTemplate}">
             <ListView.ItemContainerTransitions><TransitionCollection/></ListView.ItemContainerTransitions>
             <ListView.Header>
               <Grid x:Name="FavoriteHeaderSpace" Height="280"/>
@@ -284,25 +293,26 @@
         </StackPanel>
         <InfoBar x:Name="PreferenceNotice" Grid.Row="1" VerticalAlignment="Bottom" Severity="Warning" IsOpen="False" Message="界面偏好未能保存，下次启动可能恢复默认。"/>
       </Grid>
-      </Border>
-      <Border x:Name="QueueShell" Grid.Column="1" Margin="4,0,0,0" Style="{StaticResource ShellCardStyle}">
-      <Grid>
+      </Grid>
+      <Grid x:Name="QueueShell" Grid.Column="1" Margin="4,0,0,0">
+      <Grid x:Name="QueueShellHover" IsHitTestVisible="False"><Border x:Name="QueueShellChrome" Style="{StaticResource ShellCardStyle}"/></Grid>
+      <Grid Margin="1">
       <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <Grid x:Name="QueueCardHost" Grid.Column="1" Width="0" Visibility="Collapsed" SizeChanged="OnQueueHostSizeChanged">
-        <Border x:Name="QueueCard" Width="400" HorizontalAlignment="Right">
+      <Canvas x:Name="QueueCardHost" Grid.Column="1" Width="0" Visibility="Collapsed" SizeChanged="OnQueueHostSizeChanged">
+        <Border x:Name="QueueCard" Width="400" Height="{Binding ActualHeight, ElementName=QueueCardHost}">
           <Grid Padding="12" RowSpacing="12">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-            <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Grid x:Name="QueueHeading" Margin="0,0,34,0" ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <TextBlock Text="待播曲目" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
               <TextBlock x:Name="QueueHeadingCount" Grid.Column="1" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             </Grid>
-            <StackPanel x:Name="QueueCurrentArea" Grid.Row="1" Visibility="Collapsed" Spacing="4">
+            <StackPanel x:Name="QueueCurrentArea" Grid.Row="1" Margin="0,0,34,0" Visibility="Collapsed" Spacing="4">
               <Grid><TextBlock Text="正在演唱" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/><TextBlock x:Name="QueueCurrentState" HorizontalAlignment="Right" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></Grid>
               <ContentControl x:Name="QueueCurrentContent" HorizontalContentAlignment="Stretch" ContentTemplate="{StaticResource QueueRowTemplate}"/>
             </StackPanel>
             <Grid Grid.Row="2">
-              <ListView x:Name="QueueSongs" SelectionMode="None" HorizontalContentAlignment="Stretch" ItemContainerStyle="{StaticResource LibraryRowStyle}" ItemTemplate="{StaticResource QueueRowTemplate}" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AllowDrop="True" DragOver="OnQueueListDragOver" Drop="OnQueueListDrop"><ListView.ItemContainerTransitions><TransitionCollection/></ListView.ItemContainerTransitions></ListView>
-              <StackPanel x:Name="QueueEmpty" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" MaxWidth="250">
+              <ListView x:Name="QueueSongs" Padding="0,0,34,0" SelectionMode="None" HorizontalContentAlignment="Stretch" ItemContainerStyle="{StaticResource SongRowStyle}" ItemTemplate="{StaticResource QueueRowTemplate}" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" PointerMoved="OnQueueDragPointerMoved" PointerReleased="OnQueueDragPointerReleased" PointerCanceled="OnQueueDragPointerCanceled" PointerCaptureLost="OnQueueDragPointerCaptureLost"><ListView.ItemContainerTransitions><TransitionCollection/></ListView.ItemContainerTransitions></ListView>
+              <StackPanel x:Name="QueueEmpty" Margin="0,0,34,0" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" MaxWidth="250">
                 <FontIcon Glyph="&#xE8EF;" FontSize="36" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                 <TextBlock x:Name="QueueEmptyTitle" Text="还没有待播歌曲" FontSize="18" TextWrapping="Wrap" TextAlignment="Center"/>
                 <TextBlock Text="点击歌曲旁的 ＋ 加入待播" FontSize="14" TextWrapping="Wrap" TextAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -310,12 +320,12 @@
             </Grid>
           </Grid>
         </Border>
-      </Grid>
-      <Button x:Name="QueueOpenButton" VerticalAlignment="Center" Width="34" Height="72" Padding="0" BorderThickness="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Click="OnQueueToggle" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="待播曲目" AutomationProperties.Name="展开待播曲目">
-        <Grid Width="34" Height="72"><FontIcon x:Name="QueueToggleChevron" Glyph="&#xE76B;" FontSize="16" VerticalAlignment="Center"/><TextBlock x:Name="QueueBadge" Text="0" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Bottom"/></Grid>
+      </Canvas>
+      <Button x:Name="QueueOpenButton" VerticalAlignment="Stretch" Width="34" Padding="0" BorderThickness="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Click="OnQueueToggle" PointerEntered="OnQueueRailEntered" PointerExited="OnQueueRailExited" PointerPressed="OnQueueRailPressed" PointerReleased="OnQueueRailReleased" Style="{StaticResource QueueRailStyle}" ToolTipService.ToolTip="待播曲目" AutomationProperties.Name="展开待播曲目">
+        <Grid x:Name="QueueToggleContent" Width="34" Height="72"><FontIcon x:Name="QueueToggleChevron" Glyph="&#xE76B;" FontSize="16" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"><FontIcon.RenderTransform><RotateTransform x:Name="QueueChevronRotation"/></FontIcon.RenderTransform></FontIcon><TextBlock x:Name="QueueBadge" Text="0" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Bottom"/></Grid>
       </Button>
       </Grid>
-      </Border>
+      </Grid>
       </Grid>
     </NavigationView>
     <Canvas x:Name="QueueFlightLayer" Grid.RowSpan="2" IsHitTestVisible="False"/>

@@ -249,5 +249,6 @@ public sealed partial class MainWindow
             if (list.ItemsPanelRoot is Panel panel)
                 foreach (var item in panel.Children.OfType<ListViewItem>())
                     if (item.ContentTemplateRoot is SongRowSurface surface) surface.RefreshHoverPalette();
+        RefreshQueueRowPalette();
     }
 }

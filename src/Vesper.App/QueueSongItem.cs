@@ -23,8 +23,6 @@ public sealed class QueueSongItem : INotifyPropertyChanged, IDisposable
     public double RowOpacity => IsAvailable ? 1 : .5;
     public bool ActionsVisible { get; private set; }
     public double ActionsOpacity => ActionsVisible ? 1 : 0;
-    public bool DropBefore { get; private set; }
-    public bool DropAfter { get; private set; }
     public QueueSongItem(QueueEntry entry) { Entry = entry; }
     public void Update(QueueEntry entry, LibrarySongItem? song, int position)
     {
@@ -55,8 +53,8 @@ public sealed class QueueSongItem : INotifyPropertyChanged, IDisposable
         if (ActionsVisible == visible) return;
         ActionsVisible = visible; Notify(nameof(ActionsVisible)); Notify(nameof(ActionsOpacity));
     }
-    public void SetDrop(bool before, bool after)
-    { if (DropBefore == before && DropAfter == after) return; DropBefore = before; DropAfter = after; Notify(nameof(DropBefore)); Notify(nameof(DropAfter)); }
+    public void SetPosition(int position)
+    { if (Position == position) return; Position = position; Notify(nameof(Position)); Notify(nameof(Number)); }
     private void Notify(string? property = null) => PropertyChanged?.Invoke(this, new(property));
     public void Dispose() { if (Song is not null) Song.PropertyChanged -= OnSongChanged; }
 }
