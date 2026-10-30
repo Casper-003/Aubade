@@ -85,6 +85,8 @@ public sealed partial class MainWindow
         StopQueueLayoutTransition();
         queueChevronAnimation?.Stop();
         queueChevronAnimation = null;
+        queueRailHintAnimation?.Stop();
+        queueRailHintAnimation = null;
         queueUndoTimer.Stop(); queueAdditionTimer.Stop(); queueAvailabilityTimer.Stop(); queueDragTimer.Stop();
         viewModel.Queue.Pending.CollectionChanged -= OnQueueCollectionChanged;
         viewModel.Queue.PropertyChanged -= OnQueueStateChanged;

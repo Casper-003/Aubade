@@ -13,7 +13,11 @@ public sealed partial class MainWindow
 {
     // 保持滚动属性集的强引用；滚动动画全部由合成线程求值。
     private sealed record OverviewMotion(ScrollViewer Viewer, CompositionPropertySet Scroll, CompositionPropertySet Metrics,
-        double TitleWidthPerFontUnit, double TitleHeightPerFontUnit, double TitleLineHeightPerFontUnit);
+        double TitleWidthPerFontUnit, double TitleHeightPerFontUnit, double TitleLineHeightPerFontUnit)
+    {
+        internal float HeaderHeight = float.NaN;
+        internal double NativeTitleFontSize = double.NaN;
+    }
     private readonly Dictionary<ListView, OverviewMotion> overviewMotions = [];
     private bool stripeRefreshQueued;
     private bool overviewScrolling;
@@ -126,21 +130,21 @@ public sealed partial class MainWindow
             footer.Height = 0;
         if (existing is not null)
         {
-            UpdateOverviewTitleLayout(existing, title, page.ActualWidth - titleMotion.Margin.Left - 32 - 16, height);
+            UpdateOverviewTitleLayout(existing, title, page.ActualWidth - titleMotion.Margin.Left - 32, height);
             return;
         }
         var visual = ElementCompositionPreview.GetElementVisual(hero);
         var compositor = visual.Compositor;
         var properties = ElementCompositionPreview.GetScrollViewerManipulationPropertySet(scroll);
         var metrics = compositor.CreatePropertySet();
-        // Measure the reference typeface once. Responsive sizing and scrolling then
-        // change composition scales, without remeasuring the title's text at every width.
+        // Measure the typeface proportions once. Background changes set the native
+        // text size; only scrolling scales that correctly sized text down.
         title.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
         var motion = new OverviewMotion(scroll, properties, metrics,
             title.DesiredSize.Width / title.FontSize, title.DesiredSize.Height / title.FontSize,
             title.LineHeight / title.FontSize);
         overviewMotions[list] = motion;
-        UpdateOverviewTitleLayout(motion, title, page.ActualWidth - titleMotion.Margin.Left - 32 - 16, height);
+        UpdateOverviewTitleLayout(motion, title, page.ActualWidth - titleMotion.Margin.Left - 32, height);
         scroll.ViewChanged += OnOverviewViewChanged;
         const string progress = "Clamp(-scroll.Translation.Y / (metrics.Height - 48), 0, 1)";
         ExpressionAnimation Expression(string formula)
@@ -171,20 +175,27 @@ public sealed partial class MainWindow
 
     private static void UpdateOverviewTitleLayout(OverviewMotion motion, TextBlock title, double availableWidth, float height)
     {
-        // Keep the glyph layout stable while a real card-width animation reflows the page.
-        // Fit the visible line box and width with an equal X/Y composition scale instead.
-        const double baseFontSize = 96;
+        // Render native glyphs at the fitted size instead of enlarging a small cached
+        // glyph layout. An unchanged fit does not invalidate text layout again.
         double fitFontSize = Math.Max(1, Math.Min(height * .46 / Math.Max(.01, motion.TitleHeightPerFontUnit),
             Math.Max(1, availableWidth - 2) / Math.Max(.01, motion.TitleWidthPerFontUnit)));
-        if (Math.Abs(title.FontSize - baseFontSize) > .01)
+        if (Math.Abs(title.FontSize - fitFontSize) > .01)
         {
-            title.FontSize = baseFontSize;
-            title.LineHeight = baseFontSize * motion.TitleLineHeightPerFontUnit;
+            title.FontSize = fitFontSize;
+            title.LineHeight = fitFontSize * motion.TitleLineHeightPerFontUnit;
         }
-        motion.Metrics.InsertScalar("Height", height);
-        motion.Metrics.InsertScalar("TitleHeight", (float)(fitFontSize * motion.TitleHeightPerFontUnit));
-        motion.Metrics.InsertScalar("ExpandedTitleScale", (float)(fitFontSize / baseFontSize));
-        motion.Metrics.InsertScalar("CompactTitleScale", (float)(24 / baseFontSize));
+        if (motion.HeaderHeight != height)
+        {
+            motion.HeaderHeight = height;
+            motion.Metrics.InsertScalar("Height", height);
+        }
+        if (motion.NativeTitleFontSize != title.FontSize)
+        {
+            motion.NativeTitleFontSize = title.FontSize;
+            motion.Metrics.InsertScalar("TitleHeight", (float)(title.FontSize * motion.TitleHeightPerFontUnit));
+            motion.Metrics.InsertScalar("ExpandedTitleScale", 1);
+            motion.Metrics.InsertScalar("CompactTitleScale", (float)Math.Min(1, 24 / title.FontSize));
+        }
     }
 
     private void OnOverviewContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)

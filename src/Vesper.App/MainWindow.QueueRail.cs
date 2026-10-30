@@ -11,7 +11,6 @@ public sealed partial class MainWindow
 {
     private Storyboard? queueChevronAnimation;
     private Storyboard? queueRailHintAnimation;
-    private Vector3KeyFrameAnimation? queueRailHintSlide;
     private bool queueChevronOpen;
 
     private void AnimateQueueChevron()
@@ -51,51 +50,40 @@ public sealed partial class MainWindow
     {
         if (closed || QueueShellHover.ActualWidth <= 0) return;
         peek = peek && !queuePanelOpen && !queueLayoutAnimating;
-        double from = QueueRailHintTransform.ScaleX;
+        double from = QueueOpenButton.Width;
         queueRailHintAnimation?.Stop();
-        QueueRailHintTransform.ScaleX = from;
-        // Scale around the right edge: the rail grows four units to the left,
-        // while its right edge stays exactly aligned with the window's cards.
-        // The wrapper has its own traditional transform; the chrome's card
-        // transition is a separate child transform.
-        double target = 1 + (peek ? 4 / QueueShellHover.ActualWidth : 0);
+        QueueOpenButton.Width = from;
+        // The real Auto column grows to the left. Its sibling shrinks with it,
+        // preserving both the four-unit card gap and the fixed outer edge.
+        double target = peek ? 38 : 34;
         var storyboard = new Storyboard();
         var expand = new DoubleAnimation
         {
-            From = from, To = target, Duration = TimeSpan.FromMilliseconds(140),
+            From = from, To = target, Duration = TimeSpan.FromMilliseconds(140), EnableDependentAnimation = true,
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
-        Storyboard.SetTarget(expand, QueueRailHintTransform);
-        Storyboard.SetTargetProperty(expand, nameof(Microsoft.UI.Xaml.Media.CompositeTransform.ScaleX));
+        Storyboard.SetTarget(expand, QueueOpenButton);
+        Storyboard.SetTargetProperty(expand, nameof(FrameworkElement.Width));
         storyboard.Children.Add(expand);
         storyboard.Completed += (_, _) =>
         {
             if (closed || !ReferenceEquals(queueRailHintAnimation, storyboard)) return;
-            storyboard.Stop(); QueueRailHintTransform.ScaleX = target; queueRailHintAnimation = null;
+            QueueOpenButton.Width = target; storyboard.Stop(); queueRailHintAnimation = null;
         };
         queueRailHintAnimation = storyboard; storyboard.Begin();
 
-        var compositor = ElementCompositionPreview.GetElementVisual(Root).Compositor;
-        var slide = compositor.CreateVector3KeyFrameAnimation();
-        slide.Target = "Translation"; slide.InsertExpressionKeyFrame(0, "this.StartingValue");
-        slide.InsertKeyFrame(1, new Vector3(peek ? -2 : 0, 0, 0)); slide.Duration = TimeSpan.FromMilliseconds(140);
-        queueRailHintSlide = slide;
-        QueueToggleContent.StartAnimation(slide);
         AnimateQueueRailContent(1);
     }
 
     private void ResetQueueRailHint()
     {
         queueRailHintAnimation?.Stop(); queueRailHintAnimation = null;
-        QueueRailHintTransform.ScaleX = 1;
-        if (closed) return;
-        if (queueRailHintSlide is { } slide) QueueToggleContent.StopAnimation(slide);
-        queueRailHintSlide = null;
-        QueueToggleContent.Translation = Vector3.Zero;
+        QueueOpenButton.Width = 34;
     }
 
     private void AnimateQueueRailContent(float target)
     {
+        if (closed) return;
         QueueToggleContent.CenterPoint = new Vector3(17, 36, 0);
         var compositor = ElementCompositionPreview.GetElementVisual(Root).Compositor;
         var pulse = compositor.CreateVector3KeyFrameAnimation();

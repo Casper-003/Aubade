@@ -88,11 +88,23 @@ public sealed partial class MainWindow
 
     private void OnQueueHostSizeChanged(object sender, SizeChangedEventArgs args)
     {
-        PositionQueueCard();
+        // ActualHeight does not notify ElementName bindings. A Canvas also does not
+        // stretch its children, so the card must receive the arranged height explicitly.
+        PositionQueueCard(args.NewSize.Height);
         UpdateQueueHostClip();
     }
 
-    private void PositionQueueCard() => Canvas.SetLeft(QueueCard, Math.Max(0, QueueCardHost.Width) - Math.Max(0, QueueCard.Width));
+    private void PositionQueueCard(double? hostHeight = null)
+    {
+        SetQueueCardHeight(hostHeight ?? QueueCardHost.ActualHeight);
+        Canvas.SetLeft(QueueCard, Math.Max(0, QueueCardHost.Width) - Math.Max(0, QueueCard.Width));
+    }
+
+    private void SetQueueCardHeight(double hostHeight)
+    {
+        double height = Math.Max(0, hostHeight);
+        if (double.IsNaN(QueueCard.Height) || Math.Abs(QueueCard.Height - height) > .01) QueueCard.Height = height;
+    }
 
     private void UpdateQueueHostClip()
     {

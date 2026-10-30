@@ -4,6 +4,10 @@ using Microsoft.UI.Xaml.Controls;
 using Vesper.Core;
 using Windows.Foundation;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Graphics.Imaging;
+using Windows.Storage;
+using Windows.Storage.Streams;
 
 namespace Vesper.App;
 
@@ -15,6 +19,7 @@ public sealed partial class MainWindow
         var failures = new List<string>();
         int transitions = 0, idleTitleResets = 0, marqueeResets = 0, dragPreviewChecks = 0;
         int browserLayouts = 0, maxLayoutsPerTransition = 0;
+        var contentChecks = new List<object>();
         BrowserCard.SizeChanged += (_, _) => browserLayouts++;
         string probe = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(outputPath))!, $"queue-probe-{Guid.NewGuid():N}.tmp");
         try
@@ -47,6 +52,8 @@ public sealed partial class MainWindow
                 Root.UpdateLayout();
                 maxLayoutsPerTransition = Math.Max(maxLayoutsPerTransition, browserLayouts);
                 if (!queuePanelOpen || QueueCardHost.ActualWidth < 100) failures.Add($"cycle {cycle}: queue did not open.");
+                contentChecks.Add(await CheckQueueVisibleContentAsync(failures, cycle, cycle is 0 or 4,
+                    cycle == 0 ? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(outputPath))!, "queue-visible-content.png") : null));
                 if (QueueShell.Margin.Left != 4 || QueueShell.Margin.Right != 0 || QueueShell.Margin.Top != 0 || QueueShell.Margin.Bottom != 0)
                     failures.Add("Queue card spacing differs from the shared four-unit edge.");
                 Point queueOrigin = QueueShell.TransformToVisual(BrowserCards).TransformPoint(default);
@@ -108,6 +115,7 @@ public sealed partial class MainWindow
             if (!queuePanelOpen || viewModel.Queue.Pending.Count != pendingBeforeAdd + 1
                 || QueueBadge.Text != viewModel.Queue.Pending.Count.ToString() || !BrowserCard.IsHitTestVisible || BrowserCards.Children.Count != 2)
                 failures.Add("Adding a song must keep the queue open and the browser accessible.");
+            await CheckQueueRemoveClickAsync(failures);
             SetQueueOpen(false); transitions++; await Task.Delay(280);
             if (idleTitleResets == 0 || marqueeResets == 0) failures.Add("No realized titles exercised the crash path.");
             if (viewModel.Queue.State != PlaybackState.Paused || viewModel.Queue.Current is null) failures.Add("Queue toggling changed the current song or paused state.");
@@ -120,12 +128,132 @@ public sealed partial class MainWindow
                 await File.WriteAllTextAsync(outputPath, JsonSerializer.Serialize(new
                 {
                     Passed = failures.Count == 0, Transitions = transitions, IdleTitleResets = idleTitleResets,
-                    MarqueeResets = marqueeResets, DragPreviewChecks = dragPreviewChecks, MaxBrowserLayoutsPerTransition = maxLayoutsPerTransition, Failures = failures,
-                    Limitations = "Isolated synthetic controls and real transition/drag-preview methods; no user library, physical pointer gesture, measured FPS or visual acceptance."
+                    MarqueeResets = marqueeResets, DragPreviewChecks = dragPreviewChecks, MaxBrowserLayoutsPerTransition = maxLayoutsPerTransition,
+                    ContentChecks = contentChecks, Failures = failures,
+                    Limitations = "Isolated synthetic controls, actual layout/hit testing and rendered heading/row pixel differences; no user library, physical pointer gesture, measured FPS or visual acceptance."
                 }, new JsonSerializerOptions { WriteIndented = true }));
             }
             finally { if (File.Exists(probe)) File.Delete(probe); Close(); }
         }
+    }
+
+    private async Task CheckQueueRemoveClickAsync(List<string> failures)
+    {
+        QueueSongs.UpdateLayout();
+        if (QueueSongs.ItemsPanelRoot is not ItemsStackPanel panel) return;
+        var container = panel.Children.OfType<ListViewItem>().FirstOrDefault(item => item.Content is QueueSongItem);
+        if (container?.ContentTemplateRoot is not FrameworkElement { DataContext: QueueSongItem row } element
+            || element.FindName("QueueDragHandle") is not FrameworkElement handle
+            || VisualTreeHelper.GetParent(handle) is not StackPanel actions
+            || actions.Children.OfType<Button>().FirstOrDefault() is not { } remove)
+        { failures.Add("No real remove button found for click regression."); return; }
+        row.ShowActions(true); Root.UpdateLayout();
+        int before = viewModel.Queue.Pending.Count;
+        var peer = new Microsoft.UI.Xaml.Automation.Peers.ButtonAutomationPeer(remove);
+        var provider = peer.GetPattern(Microsoft.UI.Xaml.Automation.Peers.PatternInterface.Invoke)
+            as Microsoft.UI.Xaml.Automation.Provider.IInvokeProvider;
+        if (provider is null) { failures.Add("Remove button has no native Invoke pattern."); return; }
+        provider.Invoke(); await Task.Delay(40);
+        if (viewModel.Queue.Pending.Count != before - 1 || viewModel.Queue.Pending.Any(entry => entry.Id == row.Entry.Id))
+            failures.Add("The real remove button Click must change the pending queue.");
+        else OnQueueUndo(QueueUndoToast, new RoutedEventArgs());
+    }
+
+    private async Task<object> CheckQueueVisibleContentAsync(List<string> failures, int cycle, bool capturePixels, string? pngPath)
+    {
+        double hostHeight = QueueCardHost.ActualHeight, cardHeight = QueueCard.ActualHeight;
+        double headingHeight = QueueHeading.ActualHeight, listHeight = QueueSongs.ActualHeight;
+        if (hostHeight < 100 || Math.Abs(QueueCard.Height - hostHeight) > .5 || Math.Abs(cardHeight - hostHeight) > .5 || headingHeight <= 0 || listHeight <= 72)
+            failures.Add($"cycle {cycle}: visible card geometry host={hostHeight:F2}, card={cardHeight:F2}, heading={headingHeight:F2}, list={listHeight:F2}.");
+
+        var panel = QueueSongs.ItemsPanelRoot as ItemsStackPanel;
+        var first = QueueSongs.ContainerFromIndex(Math.Max(0, panel?.FirstVisibleIndex ?? 0)) as ListViewItem;
+        var row = first?.ContentTemplateRoot as FrameworkElement;
+        var handle = row?.FindName("QueueDragHandle") as FrameworkElement;
+        bool inClip = false, hit = false;
+        string? topHitName = null;
+        if (handle is not null && handle.ActualWidth > 0 && handle.ActualHeight > 0)
+        {
+            var center = new Point(handle.ActualWidth / 2, handle.ActualHeight / 2);
+            Point hostPoint = handle.TransformToVisual(QueueCardHost).TransformPoint(center);
+            Point windowPoint = handle.TransformToVisual(null).TransformPoint(center);
+            inClip = QueueCardHost.Clip?.Rect.Contains(hostPoint) == true;
+            var topHit = VisualTreeHelper.FindElementsInHostCoordinates(windowPoint, Root).FirstOrDefault();
+            topHitName = (topHit as FrameworkElement)?.Name ?? topHit?.GetType().Name;
+            for (DependencyObject? element = topHit; element is not null; element = VisualTreeHelper.GetParent(element))
+                if (ReferenceEquals(element, handle)) { hit = true; break; }
+        }
+        if (!inClip || !hit) failures.Add($"cycle {cycle}: visible row handle must be inside the host clip and topmost hit-testable (clip={inClip}, hit={hit}, top={topHitName}).");
+
+        int headingPixels = -1, rowPixels = -1;
+        if (capturePixels && row is not null)
+        {
+            var visible = await CaptureQueueRootAsync();
+            if (pngPath is not null) await WriteQueueCheckPngAsync(pngPath, visible.Width, visible.Height, visible.Pixels);
+            // A transparent card reveals the same chrome underneath. Comparing captures
+            // verifies real painted heading and row content after all ancestor clips.
+            QueueCard.Opacity = 0;
+            (int Width, int Height, byte[] Pixels) hidden;
+            try { hidden = await CaptureQueueRootAsync(); }
+            finally { QueueCard.Opacity = 1; }
+            if (visible.Width == hidden.Width && visible.Height == hidden.Height)
+            {
+                headingPixels = CountQueueChangedPixels(visible, hidden.Pixels, QueueHeading);
+                rowPixels = CountQueueChangedPixels(visible, hidden.Pixels, row);
+            }
+            if (headingPixels < 8 || rowPixels < 8)
+                failures.Add($"cycle {cycle}: heading/row produced no visible content through the host clip (pixels={headingPixels}/{rowPixels}).");
+        }
+        return new { Cycle = cycle, HostHeight = hostHeight, CardHeight = cardHeight, HeadingHeight = headingHeight,
+            ListHeight = listHeight, HandleInsideClip = inClip, HandleHit = hit, TopHit = topHitName, HeadingChangedPixels = headingPixels, RowChangedPixels = rowPixels };
+    }
+
+    private async Task<(int Width, int Height, byte[] Pixels)> CaptureQueueRootAsync()
+    {
+        var bitmap = new RenderTargetBitmap();
+        // RenderTargetBitmap omits the native Mica backdrop. Supply an opaque
+        // test-only base so translucent cards and white text remain readable in PNGs.
+        var previousBackground = Root.Background;
+        Root.Background = new SolidColorBrush(Root.ActualTheme == ElementTheme.Dark
+            ? Windows.UI.Color.FromArgb(255, 32, 32, 32) : Windows.UI.Color.FromArgb(255, 250, 250, 250));
+        try { await bitmap.RenderAsync(Root); }
+        finally { Root.Background = previousBackground; }
+        var buffer = await bitmap.GetPixelsAsync();
+        var pixels = new byte[checked((int)buffer.Length)];
+        using (var reader = DataReader.FromBuffer(buffer)) reader.ReadBytes(pixels);
+        if (bitmap.PixelWidth <= 0 || bitmap.PixelHeight <= 0 || pixels.Length == 0)
+            throw new InvalidOperationException("Queue content capture returned no pixels.");
+        return (bitmap.PixelWidth, bitmap.PixelHeight, pixels);
+    }
+
+    private int CountQueueChangedPixels((int Width, int Height, byte[] Pixels) visible, byte[] hidden, FrameworkElement region)
+    {
+        Rect bounds = region.TransformToVisual(Root).TransformBounds(new Rect(0, 0, region.ActualWidth, region.ActualHeight));
+        double sx = visible.Width / Root.ActualWidth, sy = visible.Height / Root.ActualHeight;
+        int left = Math.Clamp((int)Math.Floor(bounds.Left * sx), 0, visible.Width);
+        int right = Math.Clamp((int)Math.Ceiling(bounds.Right * sx), 0, visible.Width);
+        int top = Math.Clamp((int)Math.Floor(bounds.Top * sy), 0, visible.Height);
+        int bottom = Math.Clamp((int)Math.Ceiling(bounds.Bottom * sy), 0, visible.Height);
+        int changed = 0;
+        for (int y = top; y < bottom; y++)
+            for (int x = left; x < right; x++)
+            {
+                int offset = (y * visible.Width + x) * 4;
+                if (Math.Abs(visible.Pixels[offset] - hidden[offset]) > 8
+                    || Math.Abs(visible.Pixels[offset + 1] - hidden[offset + 1]) > 8
+                    || Math.Abs(visible.Pixels[offset + 2] - hidden[offset + 2]) > 8) changed++;
+            }
+        return changed;
+    }
+
+    private static async Task WriteQueueCheckPngAsync(string path, int width, int height, byte[] pixels)
+    {
+        await File.WriteAllBytesAsync(path, []);
+        var file = await StorageFile.GetFileFromPathAsync(path);
+        using var stream = await file.OpenAsync(FileAccessMode.ReadWrite);
+        var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);
+        encoder.SetPixelData(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied, (uint)width, (uint)height, 96, 96, pixels);
+        await encoder.FlushAsync();
     }
 
     private async Task<int> CheckQueueDragPreviewAsync(List<string> failures, int cycle)
