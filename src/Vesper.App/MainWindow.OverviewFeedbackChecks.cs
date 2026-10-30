@@ -24,28 +24,56 @@ public sealed partial class MainWindow
             || Math.Abs(LibraryScrollBar.ViewportSize - viewer.ViewportHeight) > 1)
             failures.Add("The header must span the page width with the scrollbar overlaid and matching the real viewport.");
 
-        double left = QueueShellChrome.TransformToVisual(Root).TransformPoint(default).X;
-        double right = QueueShellChrome.TransformToVisual(Root).TransformPoint(new Point(QueueShellChrome.ActualWidth, 0)).X;
-        double browserWidthBeforeHint = BrowserCard.ActualWidth;
+        Rect ChromeBounds(bool browser)
+        {
+            var chrome = browser ? queueBrowserPeekChrome : queuePanelPeekChrome;
+            if (queueRailPeekActive && chrome is not null)
+            {
+                var geometry = chrome.StrokeGeometry;
+                var bounds = new Rect(geometry.Offset.X - .5, geometry.Offset.Y - .5, geometry.Size.X + 1, geometry.Size.Y + 1);
+                return (browser ? BrowserPeekChromeLayer : QueuePeekChromeLayer).TransformToVisual(Root).TransformBounds(bounds);
+            }
+            var element = browser ? BrowserCardChrome : QueueShellChrome;
+            return element.TransformToVisual(Root).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+        }
+        double left = ChromeBounds(false).Left, right = ChromeBounds(false).Right;
+        double browserWidthBeforeHint = ChromeBounds(true).Width;
+        int hoverPageLayouts = 0, hoverRowLayouts = 0, hoverFontChanges = 0;
+        var hoverRow = (LibrarySongs.ItemsPanelRoot as Panel)?.Children.OfType<ListViewItem>().FirstOrDefault()?.ContentTemplateRoot as FrameworkElement;
+        Point? rowBeforeHint = hoverRow?.TransformToVisual(Root).TransformPoint(default);
+        void OnHoverPageSize(object sender, SizeChangedEventArgs args) => hoverPageLayouts++;
+        void OnHoverRowSize(object sender, SizeChangedEventArgs args) => hoverRowLayouts++;
+        long hoverFontToken = LibraryTitleBold.RegisterPropertyChangedCallback(TextBlock.FontSizeProperty, (_, _) => hoverFontChanges++);
+        PageArea.SizeChanged += OnHoverPageSize;
+        if (hoverRow is not null) hoverRow.SizeChanged += OnHoverRowSize;
         var gapSamples = new List<double[]>();
         void CheckGaps()
         {
-            Point shell = QueueShell.TransformToVisual(Root).TransformPoint(default);
-            Point browser = BrowserCard.TransformToVisual(Root).TransformPoint(default);
-            double[] gaps = [Root.ActualHeight - shell.Y - QueueShell.ActualHeight,
-                shell.X - browser.X - BrowserCard.ActualWidth, Root.ActualWidth - shell.X - QueueShell.ActualWidth];
+            Rect shell = ChromeBounds(false), browser = ChromeBounds(true);
+            double[] gaps = [Root.ActualHeight - shell.Bottom, shell.Left - browser.Right, Root.ActualWidth - shell.Right];
             gapSamples.Add(gaps);
             if (gaps.Any(gap => Math.Abs(gap - 4) > .6)) failures.Add($"Card gaps must stay four units: {string.Join(",", gaps.Select(gap => gap.ToString("F2")))}.");
         }
         CheckGaps();
         AnimateQueueRailHint(true); await Task.Delay(60); Root.UpdateLayout(); CheckGaps();
         await Task.Delay(150); Root.UpdateLayout(); CheckGaps();
-        double peekLeft = QueueShellChrome.TransformToVisual(Root).TransformPoint(default).X;
-        double peekRight = QueueShellChrome.TransformToVisual(Root).TransformPoint(new Point(QueueShellChrome.ActualWidth, 0)).X;
+        double peekLeft = ChromeBounds(false).Left, peekRight = ChromeBounds(false).Right;
         if (Math.Abs(right - peekRight) > .5 || Math.Abs(left - peekLeft - 4) > .5
-            || Math.Abs(browserWidthBeforeHint - BrowserCard.ActualWidth - 4) > .5)
-            failures.Add("Rail hover must expand its left boundary and shrink the browser, keeping the right edge and all gaps fixed.");
+            || Math.Abs(browserWidthBeforeHint - ChromeBounds(true).Width - 4) > .5)
+            failures.Add("Rail hover must animate the card edges four units while preserving all gaps and the right outer edge.");
+        Point hitPoint = QueueRailHost.TransformToVisual(null).TransformPoint(new Point(-2, QueueRailHost.ActualHeight / 2));
+        var topHoverHit = VisualTreeHelper.FindElementsInHostCoordinates(hitPoint, Root).FirstOrDefault();
+        bool extraRailHit = false;
+        for (DependencyObject? hit = topHoverHit; hit is not null; hit = VisualTreeHelper.GetParent(hit))
+            if (ReferenceEquals(hit, QueueOpenButton)) { extraRailHit = true; break; }
+        if (!extraRailHit) failures.Add("The four-unit hover extension must remain clickable.");
         AnimateQueueRailHint(false); await Task.Delay(180); Root.UpdateLayout(); CheckGaps();
+        PageArea.SizeChanged -= OnHoverPageSize;
+        if (hoverRow is not null) hoverRow.SizeChanged -= OnHoverRowSize;
+        LibraryTitleBold.UnregisterPropertyChangedCallback(TextBlock.FontSizeProperty, hoverFontToken);
+        if (hoverPageLayouts != 0 || hoverRowLayouts != 0 || hoverFontChanges != 0
+            || rowBeforeHint != hoverRow?.TransformToVisual(Root).TransformPoint(default))
+            failures.Add("Micro hover must not resize the page/rows, change title layout or move song content.");
 
         int fontChanges = 0;
         var widths = new HashSet<int>();
@@ -128,6 +156,8 @@ public sealed partial class MainWindow
         {
             DistinctAnimatedCardWidths = widths.Count, TitleFontSizeChanges = fontChanges, ShortListsChecked = shortLists,
             GapSamples = gapSamples,
+            MicroHoverPageLayouts = hoverPageLayouts, MicroHoverRowLayouts = hoverRowLayouts, MicroHoverFontChanges = hoverFontChanges,
+            MicroHoverExtensionHit = extraRailHit,
             UiRenderingCallbacks = frameIntervals.Count,
             MaximumUiCallbackIntervalMilliseconds = Math.Round(frameIntervals.DefaultIfEmpty(0).Max(), 2),
             Note = "UI-thread callback timing is diagnostic, not a display FPS measurement."

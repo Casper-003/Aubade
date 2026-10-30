@@ -182,6 +182,7 @@
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <Grid x:Name="BrowserCard">
       <Border x:Name="BrowserCardChrome" Style="{StaticResource ShellCardStyle}" IsHitTestVisible="False"/>
+      <Canvas x:Name="BrowserPeekChromeLayer" IsHitTestVisible="False"/>
       <Grid x:Name="BrowserContentClip" Margin="1" Loaded="OnBrowserContentClipLoaded" SizeChanged="OnBrowserContentClipSizeChanged">
       <Grid x:Name="PageArea" Margin="0" Padding="28,24" Background="Transparent">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -306,6 +307,7 @@
       <Grid x:Name="QueueShellHover" IsHitTestVisible="False">
         <Border x:Name="QueueShellChrome" Style="{StaticResource ShellCardStyle}"/>
       </Grid>
+      <Canvas x:Name="QueuePeekChromeLayer" IsHitTestVisible="False"/>
       <Grid Margin="1">
       <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <Canvas x:Name="QueueCardHost" Grid.Column="1" Width="0" Visibility="Collapsed" SizeChanged="OnQueueHostSizeChanged">
@@ -331,9 +333,11 @@
           </Grid>
         </Border>
       </Canvas>
-      <Button x:Name="QueueOpenButton" VerticalAlignment="Stretch" Width="34" Padding="0" BorderThickness="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Click="OnQueueToggle" PointerEntered="OnQueueRailEntered" PointerExited="OnQueueRailExited" PointerPressed="OnQueueRailPressed" PointerReleased="OnQueueRailReleased" PointerCanceled="OnQueueRailReleased" PointerCaptureLost="OnQueueRailReleased" Style="{StaticResource QueueRailStyle}" ToolTipService.ToolTip="待播曲目" AutomationProperties.Name="展开待播曲目">
+      <Grid x:Name="QueueRailHost" Width="34">
+      <Button x:Name="QueueOpenButton" VerticalAlignment="Stretch" HorizontalAlignment="Left" Width="38" Margin="-4,0,0,0" Padding="0" BorderThickness="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Click="OnQueueToggle" PointerEntered="OnQueueRailEntered" PointerExited="OnQueueRailExited" PointerPressed="OnQueueRailPressed" PointerReleased="OnQueueRailReleased" PointerCanceled="OnQueueRailReleased" PointerCaptureLost="OnQueueRailReleased" Style="{StaticResource QueueRailStyle}" ToolTipService.ToolTip="待播曲目" AutomationProperties.Name="展开待播曲目">
         <Grid x:Name="QueueToggleContent" Width="34" Height="72"><FontIcon x:Name="QueueToggleChevron" Glyph="&#xE76B;" FontSize="16" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"><FontIcon.RenderTransform><RotateTransform x:Name="QueueChevronRotation"/></FontIcon.RenderTransform></FontIcon><TextBlock x:Name="QueueBadge" Text="0" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Bottom"/></Grid>
       </Button>
+      </Grid>
       </Grid>
       </Grid>
       </Grid>

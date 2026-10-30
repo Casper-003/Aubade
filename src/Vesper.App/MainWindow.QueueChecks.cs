@@ -66,11 +66,11 @@ public sealed partial class MainWindow
                     failures.Add("Each card must independently draw the same one-unit light outline.");
                 Point arrowCenter = QueueToggleChevron.TransformToVisual(QueueShell).TransformPoint(new Point(QueueToggleChevron.ActualWidth / 2, QueueToggleChevron.ActualHeight / 2));
                 if (Math.Abs(arrowCenter.Y - QueueShell.ActualHeight / 2) > .5
-                    || Math.Abs(arrowCenter.X - QueueShellChrome.BorderThickness.Left - QueueOpenButton.ActualWidth / 2) > .5
+                    || Math.Abs(arrowCenter.X - QueueShellChrome.BorderThickness.Left - QueueRailHost.ActualWidth / 2) > .5
                     || Math.Abs(QueueChevronRotation.Angle - 180) > .5 || QueueBadge.Visibility != Visibility.Collapsed)
                     failures.Add("Expanded queue must have a centered left-edge chevron and a single heading count.");
                 if (Math.Abs(QueueOpenButton.ActualHeight - QueueShell.ActualHeight + 2) > .5
-                    || QueueSongs.Padding.Right != QueueOpenButton.Width || QueueHeading.Margin.Right != QueueOpenButton.Width
+                    || QueueSongs.Padding.Right != QueueRailHost.Width || QueueHeading.Margin.Right != QueueRailHost.Width
                     || LibraryScrollRail.Width != 16 || FavoriteScrollRail.Width != 16)
                     failures.Add("The entire rail must be clickable, with a matching right gutter and separate scrollbar space.");
                 if (QueueSongs.ItemsPanelRoot is not ItemsStackPanel panel) throw new InvalidOperationException("Queue list did not realize its virtualizing panel.");

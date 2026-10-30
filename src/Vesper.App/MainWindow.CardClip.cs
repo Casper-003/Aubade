@@ -32,6 +32,9 @@ public sealed partial class MainWindow
     private void UpdateBrowserContentClipSize(double width, double height)
     {
         if (closed || browserContentClipGeometry is null) return;
+        // A resize cancels the tiny visual hint before the normal layout owns the
+        // clip size again. Hover itself never changes this wrapper's layout size.
+        if (queueRailPeekActive) ResetQueueRailHint();
         var size = new Vector2((float)Math.Max(0, width), (float)Math.Max(0, height));
         if (browserContentClipGeometry.Size != size) browserContentClipGeometry.Size = size;
     }

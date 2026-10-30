@@ -32,6 +32,7 @@ public sealed partial class MainWindow
 
     private void InitializeQueuePresentation()
     {
+        InitializeQueueRailPeek();
         QueueSongs.ItemsSource = queueRows;
         QueueSongs.ContainerContentChanging += OnQueueContainerChanging;
         viewModel.Queue.Pending.CollectionChanged += OnQueueCollectionChanged;
@@ -68,6 +69,7 @@ public sealed partial class MainWindow
 
     private async void OnQueueWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
+        ResetQueueRailHint();
         if (queueCloseApproved) return;
         args.Cancel = true;
         if (queueClosing) return;
@@ -85,8 +87,7 @@ public sealed partial class MainWindow
         StopQueueLayoutTransition();
         queueChevronAnimation?.Stop();
         queueChevronAnimation = null;
-        queueRailHintAnimation?.Stop();
-        queueRailHintAnimation = null;
+        CloseQueueRailPeek();
         queueUndoTimer.Stop(); queueAdditionTimer.Stop(); queueAvailabilityTimer.Stop(); queueDragTimer.Stop();
         viewModel.Queue.Pending.CollectionChanged -= OnQueueCollectionChanged;
         viewModel.Queue.PropertyChanged -= OnQueueStateChanged;
@@ -167,8 +168,8 @@ public sealed partial class MainWindow
         if (queuePanelOpen) { SetQueueOpen(false); args.Handled = true; }
     }
     private double QueueCardGutter => QueueShell.Margin.Left + QueueShell.Margin.Right;
-    private double QueueSidebarWidth => QueueOpenButton.Width + QueueShellChrome.BorderThickness.Left + QueueShellChrome.BorderThickness.Right;
-    private double QueueCardWidth => Math.Clamp(BrowserCards.ActualWidth - QueueSidebarWidth - QueueOpenButton.Width - 320 - QueueCardGutter, 230, 400) + QueueOpenButton.Width;
+    private double QueueSidebarWidth => QueueRailHost.Width + QueueShellChrome.BorderThickness.Left + QueueShellChrome.BorderThickness.Right;
+    private double QueueCardWidth => Math.Clamp(BrowserCards.ActualWidth - QueueSidebarWidth - QueueRailHost.Width - 320 - QueueCardGutter, 230, 400) + QueueRailHost.Width;
 
     private void UpdateQueueToggle()
     {
@@ -291,7 +292,7 @@ public sealed partial class MainWindow
         QueueAdditionToast.Visibility = Visibility.Visible; queueAdditionTimer.Stop(); queueAdditionTimer.Start();
         if (Root.XamlRoot is null || QueueOpenButton.ActualWidth <= 0) return;
         Point start = (origin ?? PageArea).TransformToVisual(Root).TransformPoint(new Point((origin ?? PageArea).ActualWidth / 2, (origin ?? PageArea).ActualHeight / 2));
-        Point end = QueueOpenButton.TransformToVisual(Root).TransformPoint(new Point(QueueOpenButton.ActualWidth / 2, QueueOpenButton.ActualHeight / 2));
+        Point end = QueueToggleContent.TransformToVisual(Root).TransformPoint(new Point(QueueToggleContent.ActualWidth / 2, QueueToggleContent.ActualHeight / 2));
         var note = new TextBlock { Text = "♪", FontSize = 24, Foreground = (Brush)Navigation.Resources["NavigationViewSelectionIndicatorForeground"] };
         Canvas.SetLeft(note, start.X); Canvas.SetTop(note, start.Y); QueueFlightLayer.Children.Add(note);
         ElementCompositionPreview.SetIsTranslationEnabled(note, true);
