@@ -32,6 +32,8 @@ public sealed partial class MainWindow
     private int queueAvailabilityRevision;
     private double queueScrollOffset, queueDragScroll;
     private Guid? queueDragId;
+    private bool queueDragInProgress;
+    private const string QueueDragFormat = "Vesper.QueueEntry";
     private readonly HashSet<TextBlock> queueScrollingTitles = [];
 
     private void InitializeQueuePresentation()
@@ -150,11 +152,11 @@ public sealed partial class MainWindow
     }
 
     private void OnQueueToggle(object sender, RoutedEventArgs args) => SetQueueOpen(!queuePanelOpen);
-    private void OnQueueClose(object sender, RoutedEventArgs args) => SetQueueOpen(false);
     private void OnQueueRootKeyDown(object sender, KeyRoutedEventArgs args)
     { if (queuePanelOpen && args.Key == VirtualKey.Escape) { SetQueueOpen(false); args.Handled = true; } }
     private double QueueCardGutter => QueueShell.Margin.Left + QueueShell.Margin.Right;
-    private double QueueCardWidth => Math.Clamp(BrowserCards.ActualWidth - 36 - 320 - QueueCardGutter, 264, 400);
+    private double QueueSidebarWidth => QueueOpenButton.Width + QueueShell.BorderThickness.Left + QueueShell.BorderThickness.Right;
+    private double QueueCardWidth => Math.Clamp(BrowserCards.ActualWidth - QueueSidebarWidth - 320 - QueueCardGutter, 264, 400);
 
     private void SetQueueOpen(bool open)
     {
@@ -182,7 +184,7 @@ public sealed partial class MainWindow
             else if (FindChild<ScrollViewer>(QueueSongs) is { } scroll) scroll.ChangeView(null, queueScrollOffset, null, true);
         };
         queueLayoutAnimation = storyboard; storyboard.Begin();
-        if (open) { queueAvailabilityTimer.Start(); _ = CheckQueueAvailabilityAsync(); QueueCloseButton.Focus(FocusState.Programmatic); }
+        if (open) { queueAvailabilityTimer.Start(); _ = CheckQueueAvailabilityAsync(); }
         else { queueAvailabilityTimer.Stop(); ClearQueueDrag(); }
     }
 
@@ -197,6 +199,7 @@ public sealed partial class MainWindow
     private void UpdateQueueToggle()
     {
         QueueToggleChevron.Glyph = queuePanelOpen ? "\uE76C" : "\uE76B";
+        QueueBadge.Visibility = queuePanelOpen ? Visibility.Collapsed : Visibility.Visible;
         string action = queuePanelOpen ? "收起待播曲目" : "展开待播曲目";
         ToolTipService.SetToolTip(QueueOpenButton, $"{action} · {viewModel.Queue.Pending.Count} 首");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(QueueOpenButton, action);
@@ -262,12 +265,38 @@ public sealed partial class MainWindow
         args.Handled = true;
     }
 
+    private async void OnQueueHandlePointerPressed(object sender, PointerRoutedEventArgs args)
+    {
+        if (queueDragInProgress || sender is not ContentControl { DataContext: QueueSongItem { IsPending: true } } handle) return;
+        var point = args.GetCurrentPoint(handle);
+        if (point.Properties.IsRightButtonPressed || point.Properties.IsMiddleButtonPressed
+            || !(point.Properties.IsLeftButtonPressed || point.IsInContact)) return;
+        args.Handled = true;
+        handle.Focus(FocusState.Pointer);
+        queueDragInProgress = true;
+        try { await handle.StartDragAsync(point); }
+        catch (Exception error)
+        {
+            if (!closed)
+            {
+                QueueAdditionMessage.Text = $"无法开始拖动：{error.Message}";
+                QueueAdditionToast.Visibility = Visibility.Visible; queueAdditionTimer.Stop(); queueAdditionTimer.Start();
+            }
+        }
+        finally { queueDragInProgress = false; ClearQueueDrag(); }
+    }
+    private void PrepareQueueDrag(QueueSongItem row, DataPackage data)
+    {
+        queueDragId = row.Entry.Id;
+        data.SetData(QueueDragFormat, row.Entry.Id.ToString("D"));
+        data.RequestedOperation = DataPackageOperation.Move;
+    }
     private void OnQueueDragStarting(UIElement sender, DragStartingEventArgs args)
     {
         if (sender is not FrameworkElement { DataContext: QueueSongItem row } || !row.IsPending) { args.Cancel = true; return; }
-        queueDragId = row.Entry.Id; args.Data.Properties["VesperQueueEntry"] = row.Entry.Id.ToString(); args.AllowedOperations = DataPackageOperation.Move;
+        PrepareQueueDrag(row, args.Data); args.AllowedOperations = DataPackageOperation.Move;
     }
-    private bool IsQueueDrag(DragEventArgs args) => queueDragId is not null && args.DataView.Properties.ContainsKey("VesperQueueEntry");
+    private bool IsQueueDrag(DragEventArgs args) => queueDragId is not null && args.DataView.Contains(QueueDragFormat);
     private void OnQueueDragCompleted(UIElement sender, DropCompletedEventArgs args) => ClearQueueDrag();
     private void ClearQueueDrag() { queueDragId = null; queueDragTimer.Stop(); queueDropRow?.SetDrop(false, false); queueDropRow = null; }
     private void OnQueueRowDragLeave(object sender, DragEventArgs args) { if (sender is FrameworkElement { DataContext: QueueSongItem row }) row.SetDrop(false, false); }

@@ -11,10 +11,22 @@
       <Style x:Key="ShellCardStyle" TargetType="Border">
         <Setter Property="CornerRadius" Value="8"/>
         <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
-        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
       </Style>
       <Style x:Key="ToolbarIconStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
         <Setter Property="Width" Value="36"/><Setter Property="Height" Value="36"/><Setter Property="Padding" Value="0"/>
+      </Style>
+      <Style x:Key="QueueDragHandleStyle" TargetType="ContentControl">
+        <Setter Property="IsTabStop" Value="True"/>
+        <Setter Property="UseSystemFocusVisuals" Value="True"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContentControl">
+          <Grid Background="{TemplateBinding Background}" CornerRadius="4" Control.IsTemplateFocusTarget="True">
+            <FontIcon Glyph="&#xE700;" FontSize="14" Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Grid>
+        </ControlTemplate></Setter.Value></Setter>
       </Style>
       <Style x:Key="HistoryButtonStyle" TargetType="Button">
         <Setter Property="Width" Value="48"/><Setter Property="Height" Value="36"/><Setter Property="Margin" Value="4,6"/>
@@ -121,7 +133,7 @@
           </StackPanel>
           <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{x:Bind IsPending, Mode=OneWay}">
             <Button Width="28" Height="32" Padding="0" Click="OnQueueRemove" Style="{StaticResource SubtleButtonStyle}" Opacity="{x:Bind ActionsOpacity, Mode=OneWay}" IsHitTestVisible="{x:Bind ActionsVisible, Mode=OneWay}" ToolTipService.ToolTip="移除待播" AutomationProperties.Name="移除待播"><FontIcon Glyph="&#xE738;" FontSize="14"/></Button>
-            <Button Width="24" Height="32" Padding="0" CanDrag="True" DragStarting="OnQueueDragStarting" DropCompleted="OnQueueDragCompleted" KeyDown="OnQueueHandleKeyDown" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="拖动调整顺序；聚焦后可用上下方向键" AutomationProperties.Name="调整待播顺序"><FontIcon Glyph="&#xE700;" FontSize="14"/></Button>
+            <ContentControl x:Name="QueueDragHandle" Width="24" Height="32" PointerPressed="OnQueueHandlePointerPressed" DragStarting="OnQueueDragStarting" DropCompleted="OnQueueDragCompleted" KeyDown="OnQueueHandleKeyDown" Style="{StaticResource QueueDragHandleStyle}" ToolTipService.ToolTip="拖动调整顺序；聚焦后可用上下方向键" AutomationProperties.Name="调整待播顺序"/>
           </StackPanel>
           <Border Grid.ColumnSpan="4" Height="2" VerticalAlignment="Top" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{x:Bind DropBefore, Mode=OneWay}" IsHitTestVisible="False"/>
           <Border Grid.ColumnSpan="4" Height="2" VerticalAlignment="Bottom" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{x:Bind DropAfter, Mode=OneWay}" IsHitTestVisible="False"/>
@@ -140,7 +152,11 @@
         IsBackButtonVisible="Collapsed" IsSettingsVisible="True" SelectionChanged="OnSelectionChanged">
       <NavigationView.Resources>
         <SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="#39C5BB"/>
-        <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="Transparent"/>
+        <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent"/>
+        <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent"/>
+        <Thickness x:Key="NavigationViewContentGridBorderThickness">0</Thickness>
+        <Thickness x:Key="NavigationViewMinimalContentGridBorderThickness">0</Thickness>
+        <Thickness x:Key="TopNavigationViewContentGridBorderThickness">0</Thickness>
         <CornerRadius x:Key="NavigationViewContentGridCornerRadius">8</CornerRadius>
         <Thickness x:Key="NavigationViewContentMargin">0,0,4,4</Thickness>
       </NavigationView.Resources>
@@ -271,15 +287,14 @@
       </Border>
       <Border x:Name="QueueShell" Grid.Column="1" Margin="4,0,0,0" Style="{StaticResource ShellCardStyle}">
       <Grid>
-      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
-      <Grid x:Name="QueueCardHost" Width="0" Visibility="Collapsed" SizeChanged="OnQueueHostSizeChanged">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <Grid x:Name="QueueCardHost" Grid.Column="1" Width="0" Visibility="Collapsed" SizeChanged="OnQueueHostSizeChanged">
         <Border x:Name="QueueCard" Width="400" HorizontalAlignment="Right">
           <Grid Padding="12" RowSpacing="12">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-            <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <TextBlock Text="待播曲目" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
               <TextBlock x:Name="QueueHeadingCount" Grid.Column="1" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-              <Button x:Name="QueueCloseButton" Grid.Column="2" Width="32" Height="32" Padding="0" Click="OnQueueClose" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="收起待播曲目" AutomationProperties.Name="收起待播曲目"><FontIcon Glyph="&#xE8BB;" FontSize="14"/></Button>
             </Grid>
             <StackPanel x:Name="QueueCurrentArea" Grid.Row="1" Visibility="Collapsed" Spacing="4">
               <Grid><TextBlock Text="正在演唱" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/><TextBlock x:Name="QueueCurrentState" HorizontalAlignment="Right" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></Grid>
@@ -296,8 +311,8 @@
           </Grid>
         </Border>
       </Grid>
-      <Button x:Name="QueueOpenButton" Grid.Column="1" VerticalAlignment="Center" Width="36" Height="72" Padding="0" BorderThickness="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Click="OnQueueToggle" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="待播曲目" AutomationProperties.Name="展开待播曲目">
-        <Grid Width="36" Height="72"><FontIcon x:Name="QueueToggleChevron" Glyph="&#xE76B;" FontSize="16" VerticalAlignment="Center"/><TextBlock x:Name="QueueBadge" Text="0" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Bottom"/></Grid>
+      <Button x:Name="QueueOpenButton" VerticalAlignment="Center" Width="34" Height="72" Padding="0" BorderThickness="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Click="OnQueueToggle" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="待播曲目" AutomationProperties.Name="展开待播曲目">
+        <Grid Width="34" Height="72"><FontIcon x:Name="QueueToggleChevron" Glyph="&#xE76B;" FontSize="16" VerticalAlignment="Center"/><TextBlock x:Name="QueueBadge" Text="0" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Bottom"/></Grid>
       </Button>
       </Grid>
       </Border>
