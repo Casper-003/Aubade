@@ -38,7 +38,6 @@ public sealed partial class MainWindow
     {
         QueueSongs.ItemsSource = queueRows;
         QueueSongs.ContainerContentChanging += OnQueueContainerChanging;
-        QueueCard.Translation = new Vector3(0, 0, 8);
         viewModel.Queue.Pending.CollectionChanged += OnQueueCollectionChanged;
         viewModel.Queue.PropertyChanged += OnQueueStateChanged;
         viewModel.PropertyChanged += OnQueueLibraryChanged;
@@ -128,7 +127,7 @@ public sealed partial class MainWindow
         QueueCurrentArea.Visibility = currentQueueRow is null ? Visibility.Collapsed : Visibility.Visible;
         QueueCurrentState.Text = viewModel.Queue.State switch { PlaybackState.Playing => "播放中", PlaybackState.Paused => "已暂停", PlaybackState.Loading => "正在准备", _ => "" };
         QueueHeadingCount.Text = pending.Count.ToString(); QueueBadge.Text = pending.Count.ToString();
-        ToolTipService.SetToolTip(QueueOpenButton, $"待播曲目 · {pending.Count} 首");
+        UpdateQueueToggle();
         QueueEmpty.Visibility = pending.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         QueueEmptyTitle.Text = currentQueueRow is null ? "还没有待播歌曲" : "后面还没有待播歌曲";
         if (queuePanelOpen) _ = CheckQueueAvailabilityAsync();
@@ -152,10 +151,9 @@ public sealed partial class MainWindow
 
     private void OnQueueToggle(object sender, RoutedEventArgs args) => SetQueueOpen(!queuePanelOpen);
     private void OnQueueClose(object sender, RoutedEventArgs args) => SetQueueOpen(false);
-    private void OnQueueOutsidePressed(object sender, PointerRoutedEventArgs args) { args.Handled = true; SetQueueOpen(false); }
     private void OnQueueRootKeyDown(object sender, KeyRoutedEventArgs args)
     { if (queuePanelOpen && args.Key == VirtualKey.Escape) { SetQueueOpen(false); args.Handled = true; } }
-    private double QueueCardGutter => QueueCard.Margin.Left + QueueCard.Margin.Right;
+    private double QueueCardGutter => QueueShell.Margin.Left + QueueShell.Margin.Right;
     private double QueueCardWidth => Math.Clamp(BrowserCards.ActualWidth - 36 - 320 - QueueCardGutter, 264, 400);
 
     private void SetQueueOpen(bool open)
@@ -163,13 +161,13 @@ public sealed partial class MainWindow
         if (queuePanelOpen == open) return;
         queuePanelOpen = open;
         if (!open && FindChild<ScrollViewer>(QueueSongs) is { } viewer) queueScrollOffset = viewer.VerticalOffset;
-        QueueOutsideDismiss.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        UpdateQueueToggle();
         double from = QueueCardHost.ActualWidth;
         queueLayoutAnimation?.Stop();
         QueueCardHost.Width = from;
         QueueCardHost.Visibility = Visibility.Visible;
         QueueCard.Width = QueueCardWidth;
-        double target = open ? QueueCard.Width + QueueCardGutter : 0;
+        double target = open ? QueueCard.Width : 0;
         var storyboard = new Storyboard();
         var animation = new DoubleAnimation { From = from, To = target, Duration = TimeSpan.FromMilliseconds(220), EnableDependentAnimation = true,
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
@@ -179,7 +177,7 @@ public sealed partial class MainWindow
             if (!ReferenceEquals(queueLayoutAnimation, storyboard)) return;
             storyboard.Stop(); queueLayoutAnimation = null;
             if (queuePanelOpen) QueueCard.Width = QueueCardWidth;
-            QueueCardHost.Width = queuePanelOpen ? QueueCard.Width + QueueCardGutter : 0;
+            QueueCardHost.Width = queuePanelOpen ? QueueCard.Width : 0;
             if (!queuePanelOpen) { QueueCardHost.Visibility = Visibility.Collapsed; QueueOpenButton.Focus(FocusState.Programmatic); }
             else if (FindChild<ScrollViewer>(QueueSongs) is { } scroll) scroll.ChangeView(null, queueScrollOffset, null, true);
         };
@@ -191,10 +189,18 @@ public sealed partial class MainWindow
     private void OnQueueLayoutChanged(object sender, SizeChangedEventArgs args)
     {
         if (!queuePanelOpen || queueLayoutAnimation is not null) return;
-        QueueCard.Width = QueueCardWidth; QueueCardHost.Width = QueueCard.Width + QueueCardGutter;
+        QueueCard.Width = QueueCardWidth; QueueCardHost.Width = QueueCard.Width;
     }
     private void OnQueueHostSizeChanged(object sender, SizeChangedEventArgs args) =>
         QueueCardHost.Clip = new RectangleGeometry { Rect = new Rect(0, 0, Math.Max(0, args.NewSize.Width), Math.Max(0, args.NewSize.Height)) };
+
+    private void UpdateQueueToggle()
+    {
+        QueueToggleChevron.Glyph = queuePanelOpen ? "\uE76C" : "\uE76B";
+        string action = queuePanelOpen ? "收起待播曲目" : "展开待播曲目";
+        ToolTipService.SetToolTip(QueueOpenButton, $"{action} · {viewModel.Queue.Pending.Count} 首");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(QueueOpenButton, action);
+    }
 
     private async void OnQueueRowLoaded(object sender, RoutedEventArgs args)
     { if (sender is FrameworkElement { DataContext: QueueSongItem { Song: { } song } }) await LoadCoverAsync(song); }
@@ -345,7 +351,7 @@ public sealed partial class MainWindow
         QueueAdditionToast.Visibility = Visibility.Visible; queueAdditionTimer.Stop(); queueAdditionTimer.Start();
         if (Root.XamlRoot is null || QueueOpenButton.ActualWidth <= 0) return;
         Point start = (origin ?? PageArea).TransformToVisual(Root).TransformPoint(new Point((origin ?? PageArea).ActualWidth / 2, (origin ?? PageArea).ActualHeight / 2));
-        Point end = QueueOpenButton.TransformToVisual(Root).TransformPoint(new Point(18, 18));
+        Point end = QueueOpenButton.TransformToVisual(Root).TransformPoint(new Point(QueueOpenButton.ActualWidth / 2, QueueOpenButton.ActualHeight / 2));
         var note = new TextBlock { Text = "♪", FontSize = 24, Foreground = (Brush)Navigation.Resources["NavigationViewSelectionIndicatorForeground"] };
         Canvas.SetLeft(note, start.X); Canvas.SetTop(note, start.Y); QueueFlightLayer.Children.Add(note);
         ElementCompositionPreview.SetIsTranslationEnabled(note, true);

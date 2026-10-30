@@ -26,13 +26,19 @@ public sealed partial class MainWindow
                 OnQueueToggle(QueueOpenButton, new RoutedEventArgs()); transitions++;
                 await Task.Delay(300); Root.UpdateLayout();
                 if (!queuePanelOpen || QueueCardHost.ActualWidth < 100) failures.Add($"cycle {cycle}: queue did not open.");
-                if (QueueCard.Margin.Left != 4 || QueueCard.Margin.Right != 4 || QueueCard.Margin.Top != 0 || QueueCard.Margin.Bottom != 0)
+                if (QueueShell.Margin.Left != 4 || QueueShell.Margin.Right != 0 || QueueShell.Margin.Top != 0 || QueueShell.Margin.Bottom != 0)
                     failures.Add("Queue card spacing differs from the shared four-unit edge.");
-                Point queueOrigin = QueueCard.TransformToVisual(BrowserCards).TransformPoint(default);
+                Point queueOrigin = QueueShell.TransformToVisual(BrowserCards).TransformPoint(default);
                 Point browserOrigin = BrowserCard.TransformToVisual(BrowserCards).TransformPoint(default);
-                if (Math.Abs(queueOrigin.Y - browserOrigin.Y) > .5 || Math.Abs(QueueCard.ActualHeight - BrowserCard.ActualHeight) > .5
+                if (Math.Abs(queueOrigin.Y - browserOrigin.Y) > .5 || Math.Abs(QueueShell.ActualHeight - BrowserCard.ActualHeight) > .5
                     || Math.Abs(queueOrigin.X - browserOrigin.X - BrowserCard.ActualWidth - 4) > .5)
                     failures.Add("The visible queue and browser card edges are not aligned at a four-unit gap.");
+                if (!ReferenceEquals(BrowserCard.Style, QueueShell.Style) || QueueShell.Shadow is not null || QueueCard.Shadow is not null
+                    || !BrowserCard.BorderThickness.Equals(QueueShell.BorderThickness))
+                    failures.Add("Left and right cards must share the same light edge treatment.");
+                Point arrowCenter = QueueToggleChevron.TransformToVisual(QueueShell).TransformPoint(new Point(QueueToggleChevron.ActualWidth / 2, QueueToggleChevron.ActualHeight / 2));
+                if (Math.Abs(arrowCenter.Y - QueueShell.ActualHeight / 2) > .5 || QueueToggleChevron.Glyph != "\uE76C")
+                    failures.Add($"Expanded queue chevron must point right at the sidebar's vertical center: actual={arrowCenter.Y:F3}, expected={QueueShell.ActualHeight / 2:F3}, glyph={(int)QueueToggleChevron.Glyph[0]:X4}.");
                 if (QueueSongs.ItemsPanelRoot is not ItemsStackPanel panel) throw new InvalidOperationException("Queue list did not realize its virtualizing panel.");
                 foreach (var container in panel.Children.OfType<ListViewItem>())
                 {
@@ -47,7 +53,8 @@ public sealed partial class MainWindow
                 }
                 OnQueueToggle(QueueOpenButton, new RoutedEventArgs()); transitions++;
                 await Task.Delay(280); Root.UpdateLayout();
-                if (queuePanelOpen || QueueCardHost.Visibility != Visibility.Collapsed) failures.Add($"cycle {cycle}: queue did not close.");
+                if (queuePanelOpen || QueueCardHost.Visibility != Visibility.Collapsed || QueueToggleChevron.Glyph != "\uE76B"
+                    || Math.Abs(QueueShell.ActualWidth - 36) > .5) failures.Add($"cycle {cycle}: queue did not close to its single sidebar.");
                 if (cycle == 3)
                 {
                     viewModel.Queue.StartNext([new("queue-check-0", "当前歌曲", [probe])], out _);
@@ -60,6 +67,13 @@ public sealed partial class MainWindow
             SetQueueOpen(true); transitions++; await Task.Delay(280);
             SetQueueOpen(false); transitions++; await Task.Delay(280);
             if (queuePanelOpen || QueueCardHost.Visibility != Visibility.Collapsed) failures.Add("Interrupted transitions did not settle closed.");
+            SetQueueOpen(true); transitions++; await Task.Delay(280);
+            int pendingBeforeAdd = viewModel.Queue.Pending.Count;
+            viewModel.Queue.Add(new("added-while-open", "展开队列时继续加入", [probe]));
+            if (!queuePanelOpen || viewModel.Queue.Pending.Count != pendingBeforeAdd + 1
+                || QueueBadge.Text != viewModel.Queue.Pending.Count.ToString() || !BrowserCard.IsHitTestVisible || BrowserCards.Children.Count != 2)
+                failures.Add("Adding a song must keep the queue open and the browser accessible.");
+            SetQueueOpen(false); transitions++; await Task.Delay(280);
             if (idleTitleResets == 0 || marqueeResets == 0) failures.Add("No realized titles exercised the crash path.");
             if (viewModel.Queue.State != PlaybackState.Paused || viewModel.Queue.Current is null) failures.Add("Queue toggling changed the current song or paused state.");
         }
