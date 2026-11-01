@@ -29,9 +29,8 @@ public sealed partial class MainWindow
             if (ReferenceEquals(state.Viewer, viewer)) { SyncOverviewScrollbar(state); return; }
             DetachOverviewScrollbar(state);
         }
-        bool favorite = ReferenceEquals(list, FavoriteSongs);
-        state = new(list, viewer, favorite ? FavoriteScrollRail : LibraryScrollRail,
-            favorite ? FavoriteScrollBar : LibraryScrollBar);
+        var parts = GetOverviewParts(list);
+        state = new(list, viewer, parts.ScrollRail, parts.ScrollBar);
         overviewScrollbars[list] = state;
         viewer.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
         viewer.SizeChanged += OnOverviewScrollViewportChanged;

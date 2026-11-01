@@ -58,7 +58,7 @@ public sealed partial class MainWindow
 
     private void AnimateQueueRailContent(float target)
     {
-        if (closed) return;
+        if (closed || !queueSidebarVisible || queueSidebarAnimating) return;
         QueueToggleContent.CenterPoint = new Vector3(17, 36, 0);
         var compositor = ElementCompositionPreview.GetElementVisual(Root).Compositor;
         var pulse = compositor.CreateVector3KeyFrameAnimation();

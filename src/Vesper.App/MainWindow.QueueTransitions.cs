@@ -14,6 +14,7 @@ public sealed partial class MainWindow
 
     private void SetQueueOpen(bool open)
     {
+        if (!queueSidebarVisible || queueSidebarAnimating) return;
         if (queuePanelOpen == open) return;
         ResetQueueRailHint();
         double from = QueueCardHost.Visibility == Visibility.Visible ? QueueCardHost.ActualWidth : 0;
@@ -30,11 +31,7 @@ public sealed partial class MainWindow
 
         double target = open ? QueueCard.Width : 0;
         var storyboard = new Storyboard();
-        var width = new DoubleAnimation
-        {
-            From = from, To = target, Duration = TimeSpan.FromMilliseconds(220), EnableDependentAnimation = true,
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
-        };
+        var width = CreateQueueWidthAnimation(from, target);
         // The real card boundary drives layout. Native text trimming, action positions,
         // one-unit outlines and corner radii follow it without scaled or clipped stand-ins.
         Storyboard.SetTarget(width, QueueCardHost);
@@ -55,6 +52,12 @@ public sealed partial class MainWindow
         else { queueAvailabilityTimer.Stop(); ClearQueueDrag(); }
     }
 
+    private static DoubleAnimation CreateQueueWidthAnimation(double from, double target) => new()
+    {
+        From = from, To = target, Duration = TimeSpan.FromMilliseconds(220), EnableDependentAnimation = true,
+        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+    };
+
     private void StopQueueLayoutTransition()
     {
         queueLayoutAnimation?.Stop();
@@ -62,7 +65,7 @@ public sealed partial class MainWindow
         queueLayoutAnimating = false;
     }
 
-    private void SettleQueueLayout(bool restoreScroll = false)
+    private void SettleQueueLayout(bool restoreScroll = false, bool focusToggle = true)
     {
         QueueCard.Width = QueueCardWidth;
         QueueCardHost.Width = queuePanelOpen ? QueueCard.Width : 0;
@@ -71,7 +74,7 @@ public sealed partial class MainWindow
         if (!queuePanelOpen)
         {
             QueueCardHost.Visibility = Visibility.Collapsed;
-            QueueOpenButton.Focus(FocusState.Programmatic);
+            if (focusToggle && queueSidebarVisible) QueueOpenButton.Focus(FocusState.Programmatic);
         }
         else if (restoreScroll && FindChild<ScrollViewer>(QueueSongs) is { } scroll) scroll.ChangeView(null, queueScrollOffset, null, true);
     }
@@ -81,6 +84,12 @@ public sealed partial class MainWindow
         // Only the user's outer window resize changes this grid's width. The animated
         // Auto column changes its sibling's width, rather than this parent grid.
         if (Math.Abs(args.NewSize.Width - args.PreviousSize.Width) < .5) return;
+        if (queueSidebarAnimating)
+        {
+            StopQueueSidebarTransition();
+            SettleQueueSidebar();
+            return;
+        }
         if (queueLayoutAnimating) StopQueueLayoutTransition();
         if (queuePanelOpen) SettleQueueLayout();
         else if (QueueCardHost.Visibility == Visibility.Visible) SettleQueueLayout();

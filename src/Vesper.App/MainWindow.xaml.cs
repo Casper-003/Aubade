@@ -159,9 +159,11 @@ public sealed partial class MainWindow : Window
 
     private void OnFrameNavigated(object sender, NavigationEventArgs e)
     {
-        SetQueueOpen(false);
         if (e.Parameter is not ShellNavigationRequest request) return;
         string page = request.Key;
+        bool showQueue = request.SongId is not null || page != "创作";
+        SetQueueSidebarVisible(showQueue);
+        if (showQueue) SetQueueOpen(false);
         changingSelection = true;
         try
         {
@@ -170,7 +172,7 @@ public sealed partial class MainWindow : Window
         }
         finally { changingSelection = false; }
         PageTitle.Text = request.SongId is not null ? "歌曲详情" : page;
-        bool overview = page is "曲库" or "收藏";
+        bool overview = request.SongId is null && page is ("首页" or "曲库" or "收藏" or "创作");
         PageHeading.Visibility = overview ? Visibility.Collapsed : Visibility.Visible;
         PageArea.Padding = overview ? new Thickness(0) : new Thickness(28, 24, 28, 24);
         LibraryActions.Visibility = page == "曲库" ? Visibility.Visible : Visibility.Collapsed;
@@ -185,7 +187,7 @@ public sealed partial class MainWindow : Window
         if (!pageContent.TryGetValue(key, out FrameworkElement? content))
         {
             content = songId is not null ? new SongDetailsView(this, songId)
-                : key switch { "首页" => HomePage, "曲库" => LibraryPage, "收藏" => FavoritesPage, "设置" => AppearancePanel, _ => new Grid() };
+                : key switch { "首页" => HomePage, "曲库" => LibraryPage, "收藏" => FavoritesPage, "创作" => CreationPage, "设置" => AppearancePanel, _ => new Grid() };
             PageStorage.Children.Remove(content);
             pageContent[key] = content;
         }
@@ -196,7 +198,12 @@ public sealed partial class MainWindow : Window
         pageOwners[key] = page;
     }
 
-    private void OnLayoutChanged(object sender, SizeChangedEventArgs e) { if (ready) UpdateTitleLayout(); }
+    private void OnLayoutChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!ready) return;
+        if (DirectoryFlyout.IsOpen) DirectoryFlyout.Hide();
+        UpdateTitleLayout();
+    }
 
     private void UpdateTitleLayout()
     {

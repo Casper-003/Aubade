@@ -55,7 +55,7 @@ public sealed partial class MainWindow
     private void AnimateQueueRailPeek(bool peek)
     {
         if (closed) return;
-        peek = peek && !queuePanelOpen && !queueLayoutAnimating;
+        peek = peek && queueSidebarVisible && !queueSidebarAnimating && !queuePanelOpen && !queueLayoutAnimating;
         if (!queueRailPeekActive)
         {
             if (!peek || !PrepareQueueRailPeek()) return;

@@ -4,6 +4,7 @@ using Microsoft.UI;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 
@@ -101,32 +102,48 @@ public sealed partial class MainWindow
         }
         return null;
     }
+    private (Grid Page, Grid Hero, Canvas TitleMotion, TextBlock Title, Grid Spacer, Grid ScrollRail, ScrollBar ScrollBar)
+        GetOverviewParts(ListView list)
+    {
+        if (ReferenceEquals(list, HomeOverview))
+            return (HomePage, HomeHeroLayer, HomeTitleMotion, HomeTitleBold, HomeHeaderSpace, HomeScrollRail, HomeScrollBar);
+        if (ReferenceEquals(list, CreationOverview))
+            return (CreationPage, CreationHeroLayer, CreationTitleMotion, CreationTitleBold, CreationHeaderSpace, CreationScrollRail, CreationScrollBar);
+        if (ReferenceEquals(list, FavoriteSongs))
+            return (FavoritesPage, FavoriteHeroLayer, FavoriteTitleMotion, FavoriteTitleBold, FavoriteHeaderSpace, FavoriteScrollRail, FavoriteScrollBar);
+        return (LibraryPage, LibraryHeroLayer, LibraryTitleMotion, LibraryTitleBold, LibraryHeaderSpace, LibraryScrollRail, LibraryScrollBar);
+    }
+
     private async void OnOverviewLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not ListView list) return;
         ConfigureOverview(list);
-        var song = ReferenceEquals(list, FavoriteSongs) ? viewModel.LatestFavorite : viewModel.LibraryHero;
+        var song = ReferenceEquals(list, FavoriteSongs) ? viewModel.LatestFavorite
+            : ReferenceEquals(list, LibrarySongs) ? viewModel.LibraryHero : null;
         if (song is not null) await LoadDetailsAsync(song);
     }
     private void OnOverviewSizeChanged(object sender, SizeChangedEventArgs e) =>
-        ConfigureOverview(ReferenceEquals(sender, FavoritesPage) ? FavoriteSongs : LibrarySongs);
+        ConfigureOverview(ReferenceEquals(sender, HomePage) ? HomeOverview
+            : ReferenceEquals(sender, CreationPage) ? CreationOverview
+            : ReferenceEquals(sender, FavoritesPage) ? FavoriteSongs : LibrarySongs);
 
     private void ConfigureOverview(ListView list)
     {
-        bool favorite = ReferenceEquals(list, FavoriteSongs);
-        Grid page = favorite ? FavoritesPage : LibraryPage;
+        var parts = GetOverviewParts(list);
+        Grid page = parts.Page;
         overviewMotions.TryGetValue(list, out var existing);
         var scroll = existing?.Viewer ?? FindChild<ScrollViewer>(list);
         if (page.ActualHeight <= 0 || page.ActualWidth <= 0 || scroll is null) return;
         ConfigureOverviewScrollbar(list, scroll);
-        Grid hero = favorite ? FavoriteHeroLayer : LibraryHeroLayer;
-        Canvas titleMotion = favorite ? FavoriteTitleMotion : LibraryTitleMotion;
-        TextBlock title = favorite ? FavoriteTitleBold : LibraryTitleBold;
-        Grid spacer = favorite ? FavoriteHeaderSpace : LibraryHeaderSpace;
+        Grid hero = parts.Hero;
+        Canvas titleMotion = parts.TitleMotion;
+        TextBlock title = parts.Title;
+        Grid spacer = parts.Spacer;
         float height = (float)Math.Max(64, page.ActualHeight * .382);
         hero.Height = height;
-        spacer.Height = height - 48 + (favorite ? 16 : 52);
-        if (list.Footer is FrameworkElement footer)
+        bool library = ReferenceEquals(list, LibrarySongs);
+        spacer.Height = height - 48 + (library ? 52 : 16);
+        if ((library || ReferenceEquals(list, FavoriteSongs)) && list.Footer is FrameworkElement footer)
             footer.Height = 0;
         if (existing is not null)
         {
@@ -165,7 +182,7 @@ public sealed partial class MainWindow
         var scale = Expression($"Vector3({visibleScale}, {visibleScale}, 1)");
         scale.Target = "Scale";
         titleMotion.StartAnimation(scale);
-        if (!favorite)
+        if (library)
         {
             ElementCompositionPreview.SetIsTranslationEnabled(LibraryActions, true);
             ElementCompositionPreview.GetElementVisual(LibraryActions).StartAnimation("Translation.Y",
@@ -247,7 +264,7 @@ public sealed partial class MainWindow
         {
             stripeRefreshQueued = false;
             if (closed) return;
-            foreach (var list in new[] { LibrarySongs, FavoriteSongs })
+            foreach (var list in new[] { LibrarySongs, FavoriteSongs, HomeOverview, CreationOverview })
             {
                 if (list.ItemsPanelRoot is Panel panel)
                     foreach (var container in panel.Children.OfType<ListViewItem>()) SetRowBrush(container, list.IndexFromContainer(container));

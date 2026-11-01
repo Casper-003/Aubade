@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.Windows.Storage.Pickers;
 using Windows.Storage;
@@ -91,6 +92,32 @@ public sealed partial class MainWindow
         if (!ready) return;
         viewModel.HideUnavailable = HideUnavailableSwitch.IsOn;
         SavePreferences();
+    }
+
+    private void OnDirectoryFlyoutOpening(object sender, object e) => UpdateDirectoryPanelSize();
+
+    private void UpdateDirectoryPanelSize()
+    {
+        if (Root.XamlRoot is not { } root || !ManageFoldersButton.IsLoaded) return;
+        const double windowMargin = 24, flyoutGap = 8, presenterInsets = 50;
+
+        var pageOrigin = LibraryPage.TransformToVisual(Root).TransformPoint(default);
+        var buttonOrigin = ManageFoldersButton.TransformToVisual(LibraryActions).TransformPoint(default);
+        // LibraryActions moves on the composition thread. Reuse its exact expression
+        // rather than treating the unshifted XAML layout slot as the visible anchor.
+        double headerHeight = LibraryHeroLayer.Height;
+        double scrollOffset = overviewMotions.TryGetValue(LibrarySongs, out var motion) ? motion.Viewer.VerticalOffset : 0;
+        double progress = Math.Clamp(scrollOffset / Math.Max(1, headerHeight - 48), 0, 1);
+        double buttonTop = pageOrigin.Y + LibraryActions.Margin.Top + buttonOrigin.Y + headerHeight * (1 - progress);
+        double spaceBelow = Math.Max(0, root.Size.Height - windowMargin - buttonTop - ManageFoldersButton.ActualHeight - flyoutGap);
+        double spaceAbove = Math.Max(0, buttonTop - AppTitleBar.ActualHeight - windowMargin - flyoutGap);
+        bool openBelow = spaceBelow >= 500 || spaceBelow >= spaceAbove;
+        DirectoryFlyout.Placement = openBelow ? FlyoutPlacementMode.BottomEdgeAlignedRight : FlyoutPlacementMode.TopEdgeAlignedRight;
+
+        double width = Math.Max(0, Math.Min(800, root.Size.Width - 2 * windowMargin) - presenterInsets);
+        double height = Math.Max(0, Math.Min(500, openBelow ? spaceBelow : spaceAbove) - presenterInsets);
+        if (DirectoryPanel.Width != width) DirectoryPanel.Width = width;
+        if (DirectoryPanel.Height != height) DirectoryPanel.Height = height;
     }
 
     private async void OnAddFolder(object sender, RoutedEventArgs e)

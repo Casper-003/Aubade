@@ -8,6 +8,7 @@
       <SolidColorBrush x:Key="OverviewEvenBrush" Color="#1A808080"/>
       <SolidColorBrush x:Key="OverviewOddBrush" Color="#05808080"/><SolidColorBrush x:Key="OverviewEvenHoverBrush" Color="#383838"/><SolidColorBrush x:Key="OverviewOddHoverBrush" Color="#303030"/>
       <SolidColorBrush x:Key="OverviewHeaderBrush" Color="#202020"/>
+      <SolidColorBrush x:Key="OverviewDefaultArtworkBrush" Color="#48545C"/>
       <Style x:Key="ShellCardStyle" TargetType="Border">
         <Setter Property="CornerRadius" Value="8"/>
         <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
@@ -194,17 +195,41 @@
           <Frame.ContentTransitions><TransitionCollection><NavigationThemeTransition/></TransitionCollection></Frame.ContentTransitions>
         </Frame>
         <Grid x:Name="PageStorage" Grid.Row="1" Visibility="Collapsed">
-        <Grid x:Name="HomePage" Margin="0,28,0,0">
-          <StackPanel x:Name="HomeLibraryGuide" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520" Spacing="20" Visibility="{Binding ShowHomeHint, Converter={StaticResource BoolVisibility}}">
+        <Grid x:Name="HomePage" SizeChanged="OnOverviewSizeChanged">
+          <ListView x:Name="HomeOverview" Margin="24,48,24,12" SelectionMode="None" ScrollViewer.IsScrollInertiaEnabled="True" ScrollViewer.IsDeferredScrollingEnabled="False" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollMode="Enabled" ScrollViewer.VerticalScrollBarVisibility="Hidden" Loaded="OnOverviewLoaded">
+            <ListView.Header><Grid x:Name="HomeHeaderSpace" Height="280"/></ListView.Header>
+            <ListView.Footer>
+          <StackPanel x:Name="HomeLibraryGuide" Margin="24,32,24,32" HorizontalAlignment="Center" MaxWidth="520" Spacing="20" Visibility="{Binding ShowHomeHint, Converter={StaticResource BoolVisibility}}">
             <FontIcon Glyph="&#xE8F1;" FontSize="48" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             <TextBlock Text="还没有可用的歌曲" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
             <TextBlock Text="先把电脑中的歌曲或 MV 所在文件夹加入曲库。Vesper 会收录其中的本地媒体，文件仍保留在原位置。" FontSize="16" TextWrapping="Wrap" TextAlignment="Center"/>
             <StackPanel Spacing="14" Margin="12,0">
-              <StackPanel Orientation="Horizontal" Spacing="12"><FontIcon Glyph="&#xE8F1;" FontSize="18" VerticalAlignment="Top" Margin="0,3,0,0"/><TextBlock Text="1. 打开左侧导航的“曲库”页面。" FontSize="16" TextWrapping="Wrap"/></StackPanel>
+              <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><FontIcon Glyph="&#xE8F1;" FontSize="18" VerticalAlignment="Top" Margin="0,3,0,0"/><TextBlock Grid.Column="1" Text="1. 打开左侧导航的“曲库”页面。" FontSize="16" TextWrapping="Wrap"/></Grid>
               <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><FontIcon Glyph="&#xE8F4;" FontSize="18" VerticalAlignment="Top" Margin="0,3,0,0"/><TextBlock Grid.Column="1" Text="2. 点击页面右上角的文件夹加号，选择歌曲所在目录。" FontSize="16" TextWrapping="Wrap"/></Grid>
             </StackPanel>
             <TextBlock Text="导入后，你可以在曲库中浏览、收藏歌曲，并将它们加入待播。" FontSize="15" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center"/>
           </StackPanel>
+            </ListView.Footer>
+          </ListView>
+          <Grid x:Name="HomeHeroLayer" Height="260" VerticalAlignment="Top" IsHitTestVisible="False" Background="{StaticResource OverviewHeaderBrush}">
+            <Grid Background="{StaticResource OverviewDefaultArtworkBrush}"><Border Background="#33000000"/></Grid>
+            <Canvas x:Name="HomeTitleMotion" Margin="32,0,0,0"><TextBlock x:Name="HomeTitleBold" Canvas.Left="0" Text="Home" FontSize="96" LineHeight="116" FontWeight="Bold" Foreground="White"/></Canvas>
+          </Grid>
+          <Grid x:Name="HomeScrollRail" Width="16" HorizontalAlignment="Right" Background="Transparent" Visibility="Collapsed">
+            <primitives:ScrollBar x:Name="HomeScrollBar" Margin="1,0" Orientation="Vertical" IndicatorMode="None" IsTabStop="False" AutomationProperties.Name="首页滚动条"/>
+          </Grid>
+        </Grid>
+        <Grid x:Name="CreationPage" Visibility="Collapsed" SizeChanged="OnOverviewSizeChanged">
+          <ListView x:Name="CreationOverview" Margin="24,48,24,12" SelectionMode="None" ScrollViewer.IsScrollInertiaEnabled="True" ScrollViewer.IsDeferredScrollingEnabled="False" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollMode="Enabled" ScrollViewer.VerticalScrollBarVisibility="Hidden" Loaded="OnOverviewLoaded">
+            <ListView.Header><Grid x:Name="CreationHeaderSpace" Height="280"/></ListView.Header>
+          </ListView>
+          <Grid x:Name="CreationHeroLayer" Height="260" VerticalAlignment="Top" IsHitTestVisible="False" Background="{StaticResource OverviewHeaderBrush}">
+            <Grid Background="{StaticResource OverviewDefaultArtworkBrush}"><Border Background="#33000000"/></Grid>
+            <Canvas x:Name="CreationTitleMotion" Margin="32,0,0,0"><TextBlock x:Name="CreationTitleBold" Canvas.Left="0" Text="Create" FontSize="96" LineHeight="116" FontWeight="Bold" Foreground="White"/></Canvas>
+          </Grid>
+          <Grid x:Name="CreationScrollRail" Width="16" HorizontalAlignment="Right" Background="Transparent" Visibility="Collapsed">
+            <primitives:ScrollBar x:Name="CreationScrollBar" Margin="1,0" Orientation="Vertical" IndicatorMode="None" IsTabStop="False" AutomationProperties.Name="创作滚动条"/>
+          </Grid>
         </Grid>
         <Grid x:Name="LibraryPage" Grid.Row="1" Visibility="Collapsed" SizeChanged="OnOverviewSizeChanged">
             <ListView x:Name="LibrarySongs" Margin="24,48,24,12" ItemsSource="{Binding Results}" SelectionMode="None" ScrollViewer.IsScrollInertiaEnabled="True" ScrollViewer.IsDeferredScrollingEnabled="False" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.VerticalScrollMode="Enabled" ScrollViewer.VerticalScrollBarVisibility="Hidden" IsItemClickEnabled="True" ItemClick="OnOpenSong" Loaded="OnOverviewLoaded" ContainerContentChanging="OnOverviewContainerChanging" ItemContainerStyle="{StaticResource SongRowStyle}" ItemTemplate="{StaticResource SongRowTemplate}">
@@ -227,19 +252,30 @@
             <Button x:Name="ManageFoldersButton" IsEnabled="{Binding CanManage}" Style="{StaticResource ToolbarIconStyle}" ToolTipService.ToolTip="管理歌曲文件夹" AutomationProperties.Name="管理歌曲文件夹">
               <FontIcon Glyph="&#xE8B7;" FontSize="16"/>
               <Button.Flyout>
-                <Flyout x:Name="DirectoryFlyout" Placement="BottomEdgeAlignedRight">
-                  <Grid x:Name="DirectoryPanel" Width="440" MaxHeight="340" RowSpacing="12">
+                <Flyout x:Name="DirectoryFlyout" Placement="BottomEdgeAlignedRight" ShouldConstrainToRootBounds="True" Opening="OnDirectoryFlyoutOpening">
+                  <Flyout.FlyoutPresenterStyle>
+                    <Style TargetType="FlyoutPresenter">
+                      <Setter Property="Padding" Value="24"/>
+                      <Setter Property="MaxWidth" Value="800"/>
+                      <Setter Property="MaxHeight" Value="500"/>
+                      <Setter Property="ScrollViewer.HorizontalScrollMode" Value="Disabled"/>
+                      <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+                      <Setter Property="ScrollViewer.VerticalScrollMode" Value="Disabled"/>
+                      <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled"/>
+                    </Style>
+                  </Flyout.FlyoutPresenterStyle>
+                  <Grid x:Name="DirectoryPanel" Width="750" Height="450" RowSpacing="20">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                    <Grid><TextBlock Text="歌曲文件夹" Style="{StaticResource SubtitleTextBlockStyle}"/><TextBlock Text="{Binding DirectorySummary}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></Grid>
+                    <Grid ColumnSpacing="16"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="歌曲文件夹" Style="{StaticResource SubtitleTextBlockStyle}"/><TextBlock Grid.Column="1" Text="{Binding DirectorySummary}" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></Grid>
                     <Grid Grid.Row="1">
-                      <TextBlock Text="尚未添加歌曲文件夹。使用工具栏的文件夹加号选择歌曲目录。" Margin="0,8" MaxWidth="360" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding HasNoDirectories, Converter={StaticResource BoolVisibility}}"/>
-                      <ListView ItemsSource="{Binding Directories}" SelectionMode="None" MaxHeight="280" IsEnabled="{Binding CanManage}" ItemContainerStyle="{StaticResource LibraryRowStyle}">
+                      <TextBlock Text="尚未添加歌曲文件夹。使用工具栏的文件夹加号选择歌曲目录。" Margin="24" MaxWidth="440" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding HasNoDirectories, Converter={StaticResource BoolVisibility}}"/>
+                      <ListView ItemsSource="{Binding Directories}" SelectionMode="None" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" IsEnabled="{Binding CanManage}" ItemContainerStyle="{StaticResource LibraryRowStyle}">
                         <ListView.ItemTemplate><DataTemplate>
-                          <Grid Padding="4,8" ColumnSpacing="12">
+                          <Grid Padding="8,12" ColumnSpacing="16">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <StackPanel Spacing="3"><TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Path}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" ToolTipService.ToolTip="{Binding Path}"/></StackPanel>
+                            <StackPanel Spacing="6" VerticalAlignment="Center"><TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding Name}"/><TextBlock Text="{Binding Path}" FontSize="12" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" ToolTipService.ToolTip="{Binding Path}"/></StackPanel>
                             <FontIcon Grid.Column="1" Glyph="{Binding AvailabilityGlyph}" FontSize="14" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" ToolTipService.ToolTip="{Binding Availability}" AutomationProperties.Name="{Binding Availability}"/>
-                            <Button Grid.Column="2" Width="32" Height="32" Padding="0" Click="OnRemoveDirectory" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="移除目录，保留硬盘原文件" AutomationProperties.Name="移除目录"><FontIcon Glyph="&#xE738;" FontSize="14"/></Button>
+                            <Button Grid.Column="2" Width="44" Height="44" Padding="0" Click="OnRemoveDirectory" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="移除目录，保留硬盘原文件" AutomationProperties.Name="移除目录"><FontIcon Glyph="&#xE738;" FontSize="14"/></Button>
                           </Grid>
                         </DataTemplate></ListView.ItemTemplate>
                       </ListView>
@@ -303,7 +339,8 @@
       </Grid>
       </Grid>
       </Grid>
-      <Grid x:Name="QueueShell" Grid.Column="1" Margin="4,0,0,0">
+      <Grid x:Name="QueueSidebarSlot" Grid.Column="1" SizeChanged="OnQueueSidebarSizeChanged">
+      <Grid x:Name="QueueShell" Margin="4,0,0,0" HorizontalAlignment="Left">
       <Grid x:Name="QueueShellHover" IsHitTestVisible="False">
         <Border x:Name="QueueShellChrome" Style="{StaticResource ShellCardStyle}"/>
       </Grid>
@@ -337,6 +374,7 @@
       <Button x:Name="QueueOpenButton" VerticalAlignment="Stretch" HorizontalAlignment="Left" Width="38" Margin="-4,0,0,0" Padding="0" BorderThickness="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Click="OnQueueToggle" PointerEntered="OnQueueRailEntered" PointerExited="OnQueueRailExited" PointerPressed="OnQueueRailPressed" PointerReleased="OnQueueRailReleased" PointerCanceled="OnQueueRailReleased" PointerCaptureLost="OnQueueRailReleased" Style="{StaticResource QueueRailStyle}" ToolTipService.ToolTip="待播曲目" AutomationProperties.Name="展开待播曲目">
         <Grid x:Name="QueueToggleContent" Width="34" Height="72"><FontIcon x:Name="QueueToggleChevron" Glyph="&#xE76B;" FontSize="16" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"><FontIcon.RenderTransform><RotateTransform x:Name="QueueChevronRotation"/></FontIcon.RenderTransform></FontIcon><TextBlock x:Name="QueueBadge" Text="0" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Bottom"/></Grid>
       </Button>
+      </Grid>
       </Grid>
       </Grid>
       </Grid>

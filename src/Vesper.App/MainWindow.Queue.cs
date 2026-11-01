@@ -84,6 +84,7 @@ public sealed partial class MainWindow
     private void CloseQueuePresentation()
     {
         CancelQueueDrag(false);
+        StopQueueSidebarTransition();
         StopQueueLayoutTransition();
         queueChevronAnimation?.Stop();
         queueChevronAnimation = null;
@@ -290,7 +291,7 @@ public sealed partial class MainWindow
     {
         QueueAdditionMessage.Text = $"已加入待播 · 第 {viewModel.Queue.Pending.Count} 位 · {song.Title}";
         QueueAdditionToast.Visibility = Visibility.Visible; queueAdditionTimer.Stop(); queueAdditionTimer.Start();
-        if (Root.XamlRoot is null || QueueOpenButton.ActualWidth <= 0) return;
+        if (!queueSidebarVisible || queueSidebarAnimating || Root.XamlRoot is null || QueueOpenButton.ActualWidth <= 0) return;
         Point start = (origin ?? PageArea).TransformToVisual(Root).TransformPoint(new Point((origin ?? PageArea).ActualWidth / 2, (origin ?? PageArea).ActualHeight / 2));
         Point end = QueueToggleContent.TransformToVisual(Root).TransformPoint(new Point(QueueToggleContent.ActualWidth / 2, QueueToggleContent.ActualHeight / 2));
         var note = new TextBlock { Text = "♪", FontSize = 24, Foreground = (Brush)Navigation.Resources["NavigationViewSelectionIndicatorForeground"] };
